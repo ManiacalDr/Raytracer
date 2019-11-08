@@ -1,5 +1,5 @@
 /*Uses the Function p = u + vt to determine the color of a pixel after shooting out a ray*/
-
+//https://stackoverflow.com/questions/1986378/how-to-set-up-quadratic-equation-for-a-ray-sphere-intersection
 // Include standard headers
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,22 +10,23 @@
 
 using namespace glm;
 
-const int d = 1;
+const float d = 1;
 const int N = 2;
 const int Xsize = N; // N*N will give you the size of the image
 const int Ysize = N;
 
-vec3 cam(0.0, 0.0, 1.0);
-vec3 backgroundColor(1.0,0.0,0.0);
-vec3 ambiant(0.5, 0.5, 0.5);
+const vec3 cam(0.0, 0.0, 1.0);
+const vec3 backgroundColor(0.0,1.0,0.0);
+const vec3 ambiant(0.5, 0.5, 0.5);
 
 vec3 u = cam;
-vec3 v(0.0,0.0,0.0);
+vec3 v(0.0, 0.0, 0.0);
 vec3 p;
-double t;
 
-float pw = 2*d / N;
-float ph = 2*d / N;
+double* t;
+
+float pw = 2*d / float(N);
+float ph = 2*d / float(N);
 
 struct Material {
 	vec3 diffuse;
@@ -45,9 +46,9 @@ struct Ray { //Stores data for Ray
 	Material mat;
 	bool isNorm; //used to store if the Ray is normalized, for shadow rays we will not normalize
 
-	Ray(vec3 u){
-		start = u;
-		dir = v;
+	Ray(vec3 vec){
+		start = vec;
+		dir = vec3(0.0,0.0,0.0);
 		isNorm = false;
 	}
 
@@ -62,24 +63,31 @@ struct Light { //Stores our light data, its position in world space and the colo
 	vec3 color;
 };
 
-Light lights[] = { {{10,10,10},{1.0,1.0,1.0}}, };
+Light lights[] = { {{10,10,10},{1.0,1.0,1.0}} };
 
-Object objects[] = { {mat4(1.0), mat4(1.0), {{0.0,1.0,0.0},{1.0,1.0,1.0}, 4}}, };
+Object objects[] = { {mat4(1.0), mat4(1.0), {{0.0,1.0,0.0},{1.0,1.0,1.0}, 4}} };
 
 vec3 Pixels[Xsize][Ysize];
+
+void printVec(const vec3* p) {
+	printf("vec3: %f, %f, %f\n", p->x, p->y, p->z);
+};
 
 void makePPM() {
 	FILE *picfile;
 	picfile = fopen("out.ppm", "w");
-	fwpintf(fd, "P6\n# %dx%d Raytracer output\n%d %d\n255\n",
+	fprintf(picfile, "P6\n%d %d\n255\n",
 		Xsize, Ysize, Xsize, Ysize);
 	// For each pixel
-	for (int j = Ysize; j >= 0; j--)     // Y is flipped!
-		for (int i = 0; i < Xsize; i++) {
-			fprintf(fd, "%c%c%c", Pixels[i][j].r * 255, Pixels[i][j].g * 255, Pixels[i][j].b * 255);
+	for (int j = Ysize - 1; j >= 0; j--) {     // Y is flipped!
+		for (int i = 0; i <= Xsize - 1; i++) {
+			fprintf(picfile, "%c%c%c", char((Pixels[i][j]).r * 255), char((Pixels[i][j]).g * 255), char((Pixels[i][j]).b * 255));
+			printVec(&Pixels[i][j]);
 			// Remember though that this is a number between 0 and 255
 			// so might have to convert from 0-1.
 		}
+	}
+	fclose(picfile);
 };
 
 vec3 PhongIllumination(vec3 point, Ray ray, Light light, Object object) {
@@ -94,11 +102,11 @@ vec3 PhongIllumination(vec3 point, Ray ray, Light light, Object object) {
 	vec3 reflectDir = reflect(-lightDir, normal);
 	vec3 viewDir = normalize(-vertPos);
 
-	float lambertian = max(dot(lightDir, normal), 0.0);
+	float lambertian = max(dot(lightDir, normal), float(0.0));
 	float specular = 0.0;
 
 	if (lambertian > 0.0) {
-		float specAngle = max(dot(reflectDir, viewDir), float(0.0);
+		float specAngle = max(dot(reflectDir, viewDir), float(0.0));
 		specular = pow(specAngle, ray.mat.emissivity);
 	}
 
@@ -127,38 +135,48 @@ vec3 Shade(vec3 point, Ray ray, Object object) {
 	return Color;
 };
 
-double* quadratic(vec3 A, vec3 B, vec3 C) {
+double* quadratic(double A, double B, double C) {
 	double rad = B * B - 4 * A*C;
+	double t1;
 
 	if (rad <= 0.0)
 		return NULL;
 
-	rootrad = sqrt(rad);
+	double rootrad = sqrt(rad);
 
 	if (B > 0)
-		return (-b - rootrad) / (2 * a);
+		t1 = (-B - rootrad) / (2 * A);
 	else
-		return (-b + rootrad) / (2 * a);
+		t1 = (-B + rootrad) / (2 * A);
 
-	double t2 = c / (a*t1);//what was the point of this again?
+	double temp = C / (A*t1);
+	return &temp;//what was the point of this again?
 };
 
 vec3* calcIntersection(Ray *ray){
-	t = quadratic(ray->dir*ray->dir, 2 * ray->start*ray->dir, ray->start*ray->start - 1);
+	t = quadratic(dot(ray->dir,ray->dir), 2 * dot(ray->start,ray->dir), dot(ray->start,ray->start) - 1);
 
 	if (t == NULL)
 		return NULL;
+//std::cout << "Got here\n";
+	vec3* temp;
 
-	return ray->start + ray->dir*t;
-}
+	temp->x = ray->start.x + *t * ray->dir.x;//don
+	temp->y = ray->start.y + *t * ray->dir.y;
+	temp->z = ray->start.z + *t * ray->dir.z;
+	
+	return temp;
+};
 
-vec3 closestIntersection(Ray *ray, Object *object) {// return the intersection point, surface normal, surface, surface attributes, etc.
+vec3* closestIntersection(Ray *ray, Object *object) {// return the intersection point, surface normal, surface, surface attributes, etc.
 	Object closestObject;
 	vec3* current = NULL;
 	vec3* thing = NULL;
 
 	for (const Object &object : objects){
+		//std::cout << "Got here\n";
 		thing = calcIntersection(ray);
+		//std::cout << "Got here\n";
 		if(thing != NULL) {
 			if (&current == NULL) { //If this is the first time we intersect an object
 				current = thing;
@@ -171,32 +189,42 @@ vec3 closestIntersection(Ray *ray, Object *object) {// return the intersection p
 		}
 	}
 
+	if (thing == NULL || current == NULL)
+		return NULL;
+	
 	object = &closestObject;
-	return *current;
+	ray->mat = object->material;
+	return current;
 };
 
 vec3 trace(Ray ray) {
 	Object object;
-	vec3 intersection = closestIntersection(&ray, &object);
-	if (&intersection != NULL)
-		return Shade(intersection, ray, object);
+	vec3* intersection = closestIntersection(&ray, &object);
+	if (intersection != NULL)
+		return Shade(*intersection, ray, object);
 	return backgroundColor;
 };
 
 void RayCast() {
 	Ray current(u);
-	for (int dy = 0; dy <= N - 1; dy++) {
-		v.y = d - ph * dy - ph / 2;//calculate midpoint for row
-		for (int dx = 0; dx <= N - 1; dx++) {
-			v.x = d - pw * dx - pw / 2;//calculate midpoint for column
+	//printVec(&u);
+	//printVec(&v);
+	for (float j = 0; j <= N - 1; j++) {
+		v.y = d - ph * j - ph / 2;//calculate midpoint for row
+		//std::cout << v.y << "\n";
+		for (float i = 0; i <= N - 1; i++) {
+			v.x = d - ph * i - ph / 2;//calculate midpoint for column
+			//std::cout << v.x << "\n";
 			current.dir = v;
-			Pixels[dx][dy] = trace(current);
+
+			printVec(&current.dir);
+			//printVec(&current.start);
+			Pixels[int(i)][int(j)] = trace(current);
 		}
 	}
 };
 
 int main() {
-
 	RayCast();
 	makePPM();
 	return 0;
