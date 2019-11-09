@@ -8,3 +8,5 @@ main.o: main.cpp
 
 clean:
 	rm -rf *.o prog.exe a.exe out.ppm
+delout:
+	rm -rf out.ppm
