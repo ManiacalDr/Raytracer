@@ -1,6 +1,7 @@
 /*Uses the Function p = u + vt to determine the color of a pixel after shooting out a ray
 ran into problems with pointers pointing to uninitlized memory and trying to set a value there*/
 //https://stackoverflow.com/questions/1986378/how-to-set-up-quadratic-equation-for-a-ray-sphere-intersection
+//https://stackoverflow.com/questions/20028396/how-could-declaring-a-large-2d-array-crash-a-program
 // Include standard headers
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,6 +22,7 @@ int Ysize;
 const vec3 cam(0.0, 0.0, 1.0);
 vec3 backgroundColor(0.0,0.0,0.0);
 vec3 ambiant(0.6, 0.6, 0.6);
+vec4 defaultrefraction = vec4(vec3(0.0), 1.0002962);
 
 vec3 u = cam;
 vec3 v(0.0, 0.0, 0.0);
@@ -29,16 +31,16 @@ vec3 p;
 float pw;
 float ph;
 
-void print(const vec3* p) {
-	printf("Vec3: %f, %f, %f\n", p->r, p->g, p->b);
+void print(const vec3 p) {
+	printf("Vec3: %f, %f, %f\n", p.r, p.g, p.b);
 };
 
-void print(const vec4* p) {
-	printf("Vec4: %f, %f, %f, %f\n", p->x, p->y, p->z, p->w);
+void print(const vec4 p) {
+	printf("Vec4: %f, %f, %f, %f\n", p.x, p.y, p.z, p.w);
 };
 
-void print(const mat4* Xform) {
-	printf("Mat4:\n%f, %f, %f, %f\n%f, %f, %f, %f\n%f, %f, %f, %f\n", Xform[0][0], Xform[1][0], Xform[2][0], Xform[0][1], Xform[1][1], Xform[2][1], Xform[0][2], Xform[1][2], Xform[2][2]);
+void print(const mat4 Xform) {
+	printf("Mat4:\n%f, %f, %f, %f\n%f, %f, %f, %f\n%f, %f, %f, %f\n%f, %f, %f, %f\n", Xform[0][0], Xform[1][0], Xform[2][0], Xform[3][0], Xform[0][1], Xform[1][1], Xform[2][1], Xform[3][1], Xform[0][2], Xform[1][2], Xform[2][2], Xform[3][2], Xform[0][3], Xform[1][3], Xform[2][3], Xform[3][3]);
 };
 
 struct Material {
@@ -50,7 +52,7 @@ struct Material {
 	Material() {
 		diffuse = vec3(0.0);
 		specular = vec3(0.0);
-		refraction = vec4(vec3(0.0), 1.0002962);
+		refraction = vec4(0.0);
 		emissivity = 0;
 	}
 
@@ -64,7 +66,7 @@ struct Material {
 		refraction = vec4(r, g, b, i);
 	}
 
-	void print(){
+	void print (){
 		printf("Material: \nDiffuse: %f, %f, %f\nSpecular: %f, %f, %f\nEmissivity: %f\n\n", diffuse.x, diffuse.y, diffuse.z, specular.x, specular.y, specular.z, emissivity);
 	}
 };
@@ -85,9 +87,14 @@ struct Object {
 		mat = m;
 	}
 
-	void print() {
-		printf("Object: \nXform:\n\t%f, %f, %f\n\t%f, %f, %f\n\t%f, %f, %f\nXfmi: \n\t%f, %f, %f\n\t%f, %f, %f\n\t%f, %f, %f\n", Xform[0][0], Xform[1][0], Xform[2][0], Xform[0][1], Xform[1][1], Xform[2][1], Xform[0][2], Xform[1][2], Xform[2][2],
-			Xfmi[0][0], Xfmi[1][0], Xfmi[2][0], Xfmi[0][1], Xfmi[1][1], Xfmi[2][1], Xfmi[0][2], Xfmi[1][2], Xfmi[2][2]);
+	Object(mat4 *xform, mat4 *xfmi, Material *m) {
+		Xform = *xform;
+		Xfmi = *xfmi;
+		mat = *m;
+	}
+
+	void print(){
+		printf("Object: \nXform:\n%f, %f, %f, %f\n%f, %f, %f, %f\n%f, %f, %f, %f\n%f, %f, %f, %f\nXfmi: \n%f, %f, %f, %f\n%f, %f, %f, %f\n%f, %f, %f, %f\n%f, %f, %f, %f\n", Xform[0][0], Xform[1][0], Xform[2][0], Xform[3][0], Xform[0][1], Xform[1][1], Xform[2][1], Xform[3][1], Xform[0][2], Xform[1][2], Xform[2][2], Xform[3][2], Xform[0][3], Xform[1][3], Xform[2][3], Xform[3][3]);
 		mat.print();
 	}
 };
@@ -95,11 +102,11 @@ struct Object {
 struct Ray { //Stores data for Ray
 	vec4 start;//is the Eye
 	vec4 dir;
-	Material mat;
+	Material mat;//does this make sense? should the Ray store full material data or just some color information?
 	bool isNorm; //used to store if the Ray is normalized, for shadow rays we will not normalize
 
 	Ray(vec3 vec){
-		start = vec4(vec,0.0);
+		start = vec4(vec,1.0);
 		dir = vec4(0.0,0.0,0.0,0.0);
 		isNorm = false;
 	}
@@ -143,7 +150,7 @@ vec3 PhongIllumination(vec3 point, Ray ray, Light light, Object object) {
 
 	vec4 vertPos4 = object.Xform * vec4(point, 1.0);
 	vec3 vertPos = vec3(vertPos4) / vertPos4.w;
-	vec3 normalInterp = vec3(object.Xfmi * vec4(point, 0.0));//this should take an arbitrary normal, but for now take the normal of a shpere aka the point you hit it
+	vec3 normalInterp = vec3(transpose(object.Xfmi) * vec4(point, 0.0));//this should take an arbitrary normal, but for now take the normal of a shpere aka the point you hit it
 
 	vec3 normal = normalize(normalInterp);
 	vec3 lightDir = normalize(light.position - vertPos);
@@ -211,18 +218,22 @@ double* quadratic(double A, double B, double C, double* ret) {//we pass a pointe
 	return ret;
 };
 
-vec3* calcIntersection(Ray *ray, vec3* ret){
-	double space;
+vec3* calcIntersection(vec3 u, vec3 v, vec3* ret){
+	double space;//is allocated memory to point t to
 	double* t = NULL;
-	t = quadratic(dot(ray->dir,ray->dir), 2.0 * dot(ray->start,ray->dir), dot(ray->start,ray->start) - 1.0, &space);
+
+	//print(u);
+	//print(v);
+
+	t = quadratic(dot(v,v), 2.0 * dot(u,v), dot(u,u) - 1.0, &space);
 
 	if (!t)
 		return NULL;
 	vec3 temp;
 
-	temp.x = ray->start.x + *t * ray->dir.x;
-	temp.y = ray->start.y + *t * ray->dir.y;
-	temp.z = ray->start.z + *t * ray->dir.z;
+	temp.x = u.x + *t * v.x;
+	temp.y = u.y + *t * v.y;
+	temp.z = u.z + *t * v.z;
 
 	*ret = temp;
 
@@ -232,125 +243,155 @@ vec3* calcIntersection(Ray *ray, vec3* ret){
 vec3* closestIntersection(Ray *ray, Object *ret) {// return the intersection point, surface normal, surface, surface attributes, etc.
 	vec3 space;//some initlized memory to point our pointers to, has to be here because of scope
 	vec3* current = NULL;
-	vec3* thing = NULL;
+	vec3* smallest = NULL;
 
 	for (const Object &object : objects){
-		ray->dir = ray->dir * object.Xform;
-		thing = calcIntersection(ray, &space);
-		if(thing) {
-			if (!current) { //If this is the first time we intersect an object
-				current = thing;
+		//print(object.Xfmi);
+		current = calcIntersection(vec3(object.Xfmi * ray->start), vec3(ray->dir), &space);//we "downcast" these vectors so that we can take the proper dot product of them
+		if(current) {
+			if (!smallest) { //If this is the first time we intersect an object
+				smallest = current;
 				*ret = object;
 			}
-			else if (thing->x < current->x ) { //If the new intersection is less then the current stored, change the current
-				current = thing;
+			else if (current->x < smallest->x ) { //If the new intersection is less then the current stored, change the current
+				smallest = current;
 				*ret = object;
 				//std::cout << "Got here\n";
 			}
 		}
 	}
 
-	if (!current)
+	if (!smallest)
 		return NULL;
 	
 	ray->mat = ret->mat;
 	//ray->mat.print();
-	return current;
+	return smallest;
 };
 
 vec3 trace(Ray ray) {
 	Object object;
+	//print(ray.dir);
 	vec3* intersection = closestIntersection(&ray, &object);
 	if (intersection)
 		return Shade(*intersection, ray, object);
 	return backgroundColor;
 };
 
-int main() {
+void processInput() {
 	d = 5;
 	n = 10;
 	Xsize = n;
 	Ysize = n;
-	
+
 	int count = 1;
 
 	std::string line;
 	Object groupobject;
+	//groupobject.print();
 	std::vector<mat4> inversestack;
 	while (std::getline(std::cin, line, ' ')) {
-		std::cout << line << "\n";
-		if ("#" == line);
+		std::cout << line << " ";
+		if ("#" == line){ std::cout << "\n"; }
 		else if ("view" == line) {
 			std::cin >> n >> d;
+			printf("%i %f\n", n,d);
 			Xsize = n;
 			Ysize = n;
 		}
 		else if ("scale" == line) {
 			float x, y, z;
+			printf("%f %f %f\n", x, y, z);
 			std::cin >> x >> y >> z;
 			groupobject.Xform = scale(groupobject.Xform, vec3(x, y, z));
 			inversestack.push_back(inverse(scale(mat4(1.0), vec3(x, y, z))));
 		}
-		else if ("move" == line){
+		else if ("move" == line) {
 			float x, y, z;
 			std::cin >> x >> y >> z;
+			printf("%f %f %f\n", x, y, z);
 			groupobject.Xform = translate(groupobject.Xform, vec3(x, y, z));
 			inversestack.push_back(inverse(translate(mat4(1.0), vec3(x, y, z))));
-			print(&groupobject.Xform);
-			print(&groupobject.Xfmi);
+			//print(vec3(x, y, z));
+			//print(groupobject.Xform);
+			//print(groupobject.Xfmi);
 		}
-		else if ("rotate" == line){
+		else if ("rotate" == line) {
 			float theta, x, y, z;
 			std::cin >> theta >> x >> y >> z;
+			printf("%f %f %f\n", x, y, z);
 			groupobject.Xform = rotate(groupobject.Xform, theta, vec3(x, y, z));
 			inversestack.push_back(inverse(rotate(mat4(1.0), theta, vec3(x, y, z))));
 		}
-		else if ("sphere" == line) { 
+		else if ("sphere" == line) {
 			mat4 temp(1.0);
 			for (auto object = inversestack.rbegin(); object != inversestack.rend(); object++) {
 				temp = temp * *object;
 			}
 			groupobject.Xfmi = temp;
-			objects.push_back(groupobject); 
-			groupobject.print();
+
+			objects.push_back(groupobject); //this needs to call some sort of new operator to allocate memory for the thingy
+			//objects[0].print();
+			std::cout << "\n";
 		}
 		else if ("light" == line) {
 			float r, g, b, x, y, z;
 			std::cin >> r >> g >> b >> x >> y >> z;
 			lights.push_back(Light(r, g, b, x, y, z));
+			std::cout << "\n";
 		}
 		else if ("background" == line) {
 			float r, g, b;
 			std::cin >> r >> g >> b;
+			printf("%f %f %f\n", r, g, b);
 			backgroundColor = vec3(r, g, b);
 		}
 		else if ("ambient" == line) {
 			float r, g, b;
 			std::cin >> r >> g >> b;
+			printf("%f %f %f\n", r, g, b);
 			ambiant = vec3(r, g, b);
 		}
 		else if ("refraction" == line) {
 			float r, g, b, i;
 			std::cin >> r >> g >> b >> i;
+			printf("%f %f %f %f\n", r, g, b, i);
 			groupobject.mat.refrac(r, g, b, i);
 		}
 		else if ("material" == line) {
 			float dr, dg, db, sr, sg, sb, p;
 			std::cin >> dr >> dg >> db >> sr >> sg >> sb >> p;
+			printf("%f %f %f %f %f %f %f\n", dr, dg, db, sr, sg, sb, p);
 			groupobject.mat.set(dr, dg, db, sr, sg, sb, p);
 		}
-		else if ("group" == line){}
-		else if ("groupend" == line){}
+		else if ("group" == line) {//when we find were at a new group, reset the current state
+			Object* temp = new Object();
+			groupobject = *temp;
+			inversestack.clear();
+			std::cout << "\n";
+		}
+		else if ("groupend" == line) {//when we end the group, reset the current state
+			Object* temp = new Object();
+			groupobject = *temp;
+			inversestack.clear();
+			std::cout << "\n";
+		}
 		else
-			printf("\nError: could not read line %i in file. Line: %s\n", count, line);
+			printf("\nError: could not read line %i in file. Line: %s\n", count, line.c_str());
 		std::getline(std::cin, line, '\n');
 		count++;
 	}
+	std::cout << "Sucessfully read the file\n";
+};
 
-	vec3 Pixels[n][n];
-	pw = 2 * d / float(n);
-	ph = 2 * d / float(n);
+int main() {
+	
+	processInput();
+	
+	std::vector<std::vector<vec3>> Pixels(n, std::vector<vec3>(n));
 
+	pw = 2 * d / n;
+	ph = 2 * d / n;
 
 	Ray current(u);
 	//printVec(&u);
@@ -362,8 +403,9 @@ int main() {
 			v.x = d - ph * i - ph / 2;//calculate midpoint for column
 			//std::cout << v.x << "\n";
 			current.dir = vec4(v - u, 0.0);
+			//print(v);
 			current.normalize();
-			//print(&current.dir);
+			//print(current.dir);
 			//print(&current.start);
 			Pixels[int(i)][int(j)] = trace(current);
 		}
@@ -382,6 +424,8 @@ int main() {
 			g = Pixels[i][j].g * 255;
 			b = Pixels[i][j].b * 255;
 			fprintf(picfile, "%c%c%c", r, g, b);
+			//if (i == Xsize - 1)//use to dertimaine if your actually writing to the file in the case of large files
+			//	std::cout << "row\n";
 			//print(&Pixels[i][j]);
 			// Remember though that this is a number between 0 and 255
 			// so might have to convert from 0-1.
