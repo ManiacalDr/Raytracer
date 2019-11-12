@@ -22,7 +22,7 @@ int Ysize;
 
 const vec3 cam(0.0, 0.0, 1.0);
 vec3 backgroundColor(0.0,0.0,0.0);
-vec3 ambiant(0.6, 0.6, 0.6);
+vec3 ambiant(0.0);
 vec4 defaultrefraction = vec4(vec3(0.0), 1.0002962);
 
 vec3 u = cam;
@@ -130,7 +130,8 @@ struct Light { //Stores our light data, its position in world space and the colo
 
 double* quadratic(double, double, double, double*);
 vec3* calcIntersection(vec3, vec3, vec3*);
-vec3* closestIntersection(Ray);
+vec3* closestIntersection(Ray*, Object*);//get rid of this, transform the returned hit insted of having to do this weird transfering of the object.
+vec3* closestIntersection(Ray*);
 
 void print(const vec3 p) {
 	printf("Vec3: %f, %f, %f\n", p.r, p.g, p.b);
@@ -144,23 +145,30 @@ void print(const mat4 Xform) {
 	printf("Mat4:\n%f, %f, %f, %f\n%f, %f, %f, %f\n%f, %f, %f, %f\n%f, %f, %f, %f\n", Xform[0][0], Xform[1][0], Xform[2][0], Xform[3][0], Xform[0][1], Xform[1][1], Xform[2][1], Xform[3][1], Xform[0][2], Xform[1][2], Xform[2][2], Xform[3][2], Xform[0][3], Xform[1][3], Xform[2][3], Xform[3][3]);
 };
 
+double vectorMag(const vec3* vec) {
+	if (!vec) {
+		return 0.0;
+	}
+	return abs(sqrt(pow(vec->x, 2) + pow(vec->y, 2) + pow(vec->z, 2)));
+};
+
 std::vector<Light> lights;
 
 std::vector<Object> objects;
 
-vec3 PhongIllumination(vec3 point, Ray ray, Light light, Object object) {
+vec3 PhongIllumination(const vec3 point,const Ray* ray,const Light* light,const Object* object) {
 	/*Calculate the phong illumination model*/
 
 	//ray.print();
 	//object.print();
 	//light.print();
 
-	vec4 vertPos4 = object.Xfmi * vec4(point, 1.0);
+	vec4 vertPos4 = object->Xfmi * vec4(point, 1.0);
 	vec3 vertPos = vec3(vertPos4) / vertPos4.w;
-	vec3 normalInterp = vec3(transpose(object.Xfmi) * vec4(point, 0.0));//this should take an arbitrary normal, but for now take the normal of a shpere aka the point you hit it
+	vec3 normalInterp = vec3(transpose(object->Xfmi) * vec4(point, 0.0));//this should take an arbitrary normal, but for now take the normal of a shpere aka the point you hit it
 
 	vec3 normal = normalize(normalInterp);
-	vec3 lightDir = normalize(light.position - vertPos);
+	vec3 lightDir = normalize(light->position - vertPos);
 	vec3 reflectDir = reflect(-lightDir, normal);
 	vec3 viewDir = normalize(-vertPos);
 
@@ -169,18 +177,18 @@ vec3 PhongIllumination(vec3 point, Ray ray, Light light, Object object) {
 
 	if (lambertian > 0.0) {
 		double specAngle = max(dot(reflectDir, viewDir), float(0.0));
-		specular = pow(specAngle, ray.mat.emissivity);
-		printf("Phong values: \nLambertian: %f\nSpecular: %f\n", lambertian, specular);
+		specular = pow(specAngle, ray->mat.emissivity);
+		//printf("Phong values: \nLambertian: %f\nSpecular: %f\n", lambertian, specular);
 	}
 
-	return vec3(ambiant + lambertian * ray.mat.diffuse + specular * ray.mat.specular);
+	return vec3(ambiant + lambertian * ray->mat.diffuse + specular * ray->mat.specular);
 };
 
-bool Shadow(vec3 point, Ray ray, Light light) {
+bool Shadow(vec3 point,const Ray* ray,const Light* light) {
 	/*Check between the object and the light to see if this new ray intersects another object*/
-	Ray lightRay(point, light.position);
-	vec3* test = closestIntersection(lightRay);
-	if (!test || !(test < 1.0))
+	Ray lightRay(point, light->position);
+	vec3* test = closestIntersection(&lightRay);
+	if (test && (vectorMag(test) < 1.0))
 		return true;
 	return false;
 };
@@ -188,12 +196,12 @@ bool Shadow(vec3 point, Ray ray, Light light) {
 // Ray reflect(vec3 point, Ray ray){//used to find the color that should be here if it is a reflective object};
 // Ray rafraction(vec3 point, Ray ray){//used to find the color that should be here if it is a rafractive object};
 
-vec3 Shade(vec3 point, Ray ray, Object object) {
+vec3 Shade(vec3 point, Ray* ray, Object* object) {
 	/*Used to discover what color a particular pixel should be*/
 	vec3 Color = backgroundColor;
 	for (const Light &light : lights){
-		if (!Shadow(point, ray, light))
-			Color += PhongIllumination(point, ray, light, object);
+		//if (!Shadow(point, ray, &light))
+			Color += PhongIllumination(point, ray, &light, object);
 	}
 	//if specularMaterial Color += trace(reflect(point, ray));
 	//if refractive Color += trace(refraction(point, ray));
@@ -253,7 +261,7 @@ vec3* calcIntersection(vec3 u, vec3 v, vec3* ret){
 	return ret;
 };
 
-vec3* closestIntersection(Ray *ray) {// return the intersection point, surface normal, surface, surface attributes, etc.
+vec3* closestIntersection(Ray *ray, Object *ret) {// return the intersection point, surface normal, surface, surface attributes, etc.
 	vec3 space;//some initlized memory to point our pointers to, has to be here because of scope
 	vec3* current = NULL;
 	vec3* smallest = NULL;
@@ -264,9 +272,11 @@ vec3* closestIntersection(Ray *ray) {// return the intersection point, surface n
 		if(current) {
 			if (!smallest) { //If this is the first time we intersect an object
 				smallest = current;
+				*ret = object;
 			}
-			else if (current->x < smallest->x ) { //If the new intersection is less then the current stored, change the current
+			else if (vectorMag(current) < vectorMag(smallest)) { //If the new intersection is less then the current stored, change the current
 				smallest = current;
+				*ret = object;
 				//std::cout << "Got here\n";
 			}
 		}
@@ -280,11 +290,40 @@ vec3* closestIntersection(Ray *ray) {// return the intersection point, surface n
 	return smallest;
 };
 
-vec3 trace(Ray ray) {
+vec3* closestIntersection(Ray *ray) {// return the intersection point, surface normal, surface, surface attributes, etc.
+	vec3 space;//some initlized memory to point our pointers to, has to be here because of scope
+	vec3* current = NULL;
+	vec3* smallest = NULL;
+
+	for (const Object &object : objects) {
+		//print(object.Xfmi);
+		current = calcIntersection(vec3(object.Xfmi * ray->start), vec3(ray->dir), &space);//we "downcast" these vectors so that we can take the proper dot product of them
+		if (current) {
+			if (!smallest) { //If this is the first time we intersect an object
+				smallest = current;
+				ray->mat = object.mat;
+			} 
+			else if (vectorMag(current) < vectorMag(smallest)) { //If the new intersection is less then the current stored, change the current
+				smallest = current;
+				ray->mat = object.mat;
+				//std::cout << "Got here\n";
+			}
+		}
+	}
+
+	if (!smallest)
+		return NULL;
+
+	//ray->mat.print();
+	return smallest;
+};
+
+vec3 trace(Ray* ray) {
+	Object object;
 	//print(ray.dir);
-	vec3* intersection = closestIntersection(&ray);
+	vec3* intersection = closestIntersection(ray, &object);
 	if (intersection)
-		return Shade(*intersection, ray);
+		return Shade(*intersection, ray, &object);
 	return backgroundColor;
 };
 
@@ -296,9 +335,10 @@ void processInput() {
 	Ysize = n;
 
 	int count = 1;
+
+	bool group;
 	
 	Object groupobject;
-	////groupobject.print();
 	std::vector<mat4> inversestack;
 	
 	std::string line, token; 
@@ -458,7 +498,15 @@ int main() {
 	
 	processInput();
 	
-	std::vector<std::vector<vec3>> Pixels(n, std::vector<vec3>(n));
+	//Pixels[n][n][3]
+	float** Pixels[n];
+	for (int i = 0; i < n; i++) {
+		Pixels[i] = new float*[n];
+		for (int j = 0; j < n; j++) {
+			Pixels[i][j] = new float[3];
+		}
+	}
+	
 
 	pw = 2 * d / n;
 	ph = 2 * d / n;
@@ -477,29 +525,32 @@ int main() {
 			current.normalize();
 			//print(current.dir);
 			//print(&current.start);
-			Pixels[int(i)][int(j)] = trace(current);
+			vec3 Color = trace(&current);
+			Pixels[int(i)][int(j)][0] = Color.r;
+			Pixels[int(i)][int(j)][1] = Color.g;
+			Pixels[int(i)][int(j)][2] = Color.b;
 		}
 	}
-	
 
 	unsigned char r, g, b;
 	FILE *picfile;
 	picfile = fopen("out.ppm", "w");
-	fprintf(picfile, "P6\n# %dx%d Raytracer output\n%d %d\n255\n",
+	fprintf(picfile, "P6 # %dx%d Raytracer output\n%d %d\n255\n\n",
 		Xsize, Ysize, Xsize, Ysize);
 	// For each pixel
-	for (int j = Ysize; j >= 0; j--) {     // Y is flipped!
+	for (int j = Ysize - 1; j >= 0; j--) {// Y is flipped!
 		for (int i = 0; i < Xsize; i++) {
-			r = Pixels[i][j].r * 255;
-			g = Pixels[i][j].g * 255;
-			b = Pixels[i][j].b * 255;
+			r = Pixels[i][j][0] * 255;
+			g = Pixels[i][j][1] * 255;
+			b = Pixels[i][j][2] * 255;
 			fprintf(picfile, "%c%c%c", r, g, b);
 			//if (i == Xsize - 1)//use to dertimaine if your actually writing to the file in the case of large files
 			//	std::cout << "row\n";
-			//print(Pixels[i][j]);
+			//std::cout << Pixels[i][j][0] << " " << Pixels[i][j][1] << " " << Pixels[i][j][2] << " ";
 			// Remember though that this is a number between 0 and 255
 			// so might have to convert from 0-1.
 		}
+		//fprintf(picfile, "\n");
 	}
 	fclose(picfile);
 	return 0;
