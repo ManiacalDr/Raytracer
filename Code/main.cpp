@@ -565,21 +565,21 @@ int main() {
 	fprintf(picfile, "P6# %dx%d Raytracer output\n%d %d\n255\n",
 			n,n,n,n);
 	// For each pixel
-	for (int j = 0; j < n; j++) {// Y is flipped!
-		for (int i = 0; i < n; i++) {
-			r = Pixels[i][j][0] * 255;
-			g = Pixels[i][j][1] * 255;
-			b = Pixels[i][j][2] * 255;
+	for (int j = Ysize - 1; j >= 0; j--) {// Y is flipped!
+		for (int i = 0; i < Xsize; i++) {
+			r = int(Pixels[i][j][0] * 255);
+			g = int(Pixels[i][j][1] * 255);
+			b = int(Pixels[i][j][2] * 255);
 			fprintf(picfile, "%c%c%c", r, g, b);
 			//if (i == Xsize - 1)//use to dertimaine if your actually writing to the file in the case of large files
 			//	std::cout << "row\n";
-			//std::cout << Pixels[i][j][0] << " " << Pixels[i][j][1] << " " << Pixels[i][j][2] << " ";
+			std::cout << int(Pixels[i][j][0] * 255) << " " << int(Pixels[i][j][1] * 255) << " " << int(Pixels[i][j][2] * 255) << " \n";
 			// Remember though that this is a number between 0 and 255
 			// so might have to convert from 0-1.
-			count++;
 		}
 		//fprintf(picfile, "\n");
 	}
+
 	std::cout << "Sucessfully wrote to the PPM " << count << "\n";
 	fclose(picfile);
 	return 0;
