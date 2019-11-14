@@ -16,9 +16,7 @@ ran into problems with pointers pointing to uninitlized memory and trying to set
 using namespace glm;
 
 float d;
-int n;
-int Xsize; // N*N will give you the size of the image
-int Ysize;
+int n; // N*N will give you the size of the image
 
 const vec3 cam(0.0, 0.0, 1.0);
 vec3 backgroundColor(0.0,0.0,0.0);
@@ -132,6 +130,7 @@ double* quadratic(double, double, double, double*);
 vec3* calcIntersection(vec3, vec3, vec3*);
 vec3* closestIntersection(Ray*, Object*);//get rid of this, transform the returned hit insted of having to do this weird transfering of the object.
 vec3* closestIntersection(Ray*);
+vec3 trace(Ray*);
 
 void print(const vec3 p) {
 	printf("Vec3: %f, %f, %f\n", p.r, p.g, p.b);
@@ -193,17 +192,22 @@ bool Shadow(vec3 point,const Ray* ray,const Light* light) {
 	return false;
 };
 
-// Ray reflect(vec3 point, Ray ray){//used to find the color that should be here if it is a reflective object};
+Ray reflect(vec3* hitpoint, Ray* ray){
+	/*used to find the color that should be here if it is a reflective object*/
+	vec3 normal = normalize(*hitpoint);
+	return Ray(*hitpoint, vec3(ray->dir) - 2*dot(vec3(ray->dir), normal)*normal);
+};
 // Ray rafraction(vec3 point, Ray ray){//used to find the color that should be here if it is a rafractive object};
 
-vec3 Shade(vec3 point, Ray* ray, Object* object) {
+vec3 Shade(vec3 hitpoint, Ray* ray, Object* object) {
 	/*Used to discover what color a particular pixel should be*/
-	vec3 Color = backgroundColor;
+	vec3 Color = vec3(0.0);
 	for (const Light &light : lights){
-		//if (!Shadow(point, ray, &light))
-			Color += PhongIllumination(point, ray, &light, object);
+		if (!Shadow(point, ray, &light))
+			Color += PhongIllumination(hitpoint, ray, &light, object);
 	}
-	//if specularMaterial Color += trace(reflect(point, ray));
+	Ray space = reflect(&hitpoint, ray);
+	if (object->mat.emissivity == 0) Color += trace(&space);
 	//if refractive Color += trace(refraction(point, ray));
 	return normalize(Color);
 };
@@ -239,11 +243,9 @@ double* quadratic(double A, double B, double C, double* ret) {//we pass a pointe
 vec3* calcIntersection(vec3 u, vec3 v, vec3* ret){
 	double space;//is allocated memory to point t to
 	double* t = NULL;
-
+	t = quadratic(dot(v, v), 2.0 * dot(u, v), dot(u, u) - 1.0, &space);
 	//print(u);
 	//print(v);
-
-	t = quadratic(dot(v,v), 2.0 * dot(u,v), dot(u,u) - 1.0, &space);
 	
 	if (!t)
 		return NULL;
@@ -320,7 +322,6 @@ vec3* closestIntersection(Ray *ray) {// return the intersection point, surface n
 
 vec3 trace(Ray* ray) {
 	Object object;
-	//print(ray.dir);
 	vec3* intersection = closestIntersection(ray, &object);
 	if (intersection)
 		return Shade(*intersection, ray, &object);
@@ -329,34 +330,20 @@ vec3 trace(Ray* ray) {
 
 void processInput() {
 	using namespace std;
-	d = 5;
-	n = 10;
-	Xsize = n;
-	Ysize = n;
-
-	int count = 1;
-
-	bool group;
 	
-	Object groupobject;
-	std::vector<mat4> inversestack;
-	
-	std::string line, token; 
-	std::vector<std::string> tokens;
+	string line, token; 
+	vector<string> tokens;
 
-	size_t pos = 0;
-
-	while (std::getline(std::cin, line, '\n')) {
-		std::istringstream check;
+	while (getline(std::cin, line, '\n')) {
+		istringstream check;
 		check.str(line);
-		for (token; std::getline(check, token, ' '); ) {
+		for (token; getline(check, token, ' '); ) {
 			if (token[0] == '#') {
 				tokens.push_back("#");
 				check.str("");
 			}
 			else if (token.length() == 0) {//removes spaces, turns out a string with only space is considered length of zero?
 				//check.str(token.substr());
-				//cout << "visited here";
 			}
 			else {
 				tokens.push_back(token);
@@ -366,15 +353,23 @@ void processInput() {
 		}
 	}
 
+	d = 5;
+	n = 10;
+
+	int count = 1;
+
+	bool ingroup = false;
+
+	Object groupobject;
+	std::vector<mat4> stack;
+
 	for (auto i = tokens.begin(); i < tokens.end(); i++) {
 		std::cout << *i << " ";
 		if ("#" == *i){ std::cout << "\n"; }
 		else if ("view" == *i) {
-			n = std::stoi(*(i + 1));
-			d = std::stof(*(i + 2));
+			n = stoi(*(i + 1));
+			d = stof(*(i + 2));
 			printf("%i %f\n", n,d);
-			Xsize = n;
-			Ysize = n;
 			i += 2;
 		}
 		else if ("scale" == *i) {
@@ -384,8 +379,14 @@ void processInput() {
 			}
 
 			printf("%f %f %f\n", arr[0], arr[1], arr[2]);
-			groupobject.Xform = scale(groupobject.Xform, vec3(arr[0], arr[1], arr[2]));
-			inversestack.push_back(inverse(scale(mat4(1.0), vec3(arr[0], arr[1], arr[2]))));
+
+			if(ingroup)
+				stack.push_back(scale(mat4(1.0), vec3(arr[0], arr[1], arr[2])));
+			else {
+				groupobject.Xfmi *= inverse(scale(mat4(1.0), vec3(arr[0], arr[1], arr[2])));
+				stack.push_back(scale(mat4(1.0), vec3(arr[0], arr[1], arr[2])));
+			}
+
 			i += 3;
 		}
 		else if ("move" == *i) {
@@ -395,11 +396,14 @@ void processInput() {
 			}
 
 			printf("%f %f %f\n", arr[0], arr[1], arr[2]);
-			groupobject.Xform = translate(groupobject.Xform, vec3(arr[0], arr[1], arr[2]));
-			inversestack.push_back(inverse(translate(mat4(1.0), vec3(arr[0], arr[1], arr[2]))));
-			//print(vec3(x, y, z));
-			//print(groupobject.Xform);
-			//print(groupobject.Xfmi);
+
+			if(ingroup)
+				stack.push_back(translate(mat4(1.0), vec3(arr[0], arr[1], arr[2])));
+			else {
+				groupobject.Xfmi *= inverse(translate(mat4(1.0), vec3(arr[0], arr[1], arr[2])));
+				stack.push_back(translate(mat4(1.0), vec3(arr[0], arr[1], arr[2])));
+			}
+			
 			i += 3;
 		}
 		else if ("rotate" == *i) {
@@ -409,25 +413,27 @@ void processInput() {
 			}
 
 			printf("%f %f %f %f\n", arr[0], arr[1], arr[2], arr[3]);
-			groupobject.Xform = rotate(groupobject.Xform, arr[0], vec3(arr[1], arr[2], arr[3]));
-			inversestack.push_back(inverse(rotate(mat4(1.0), arr[0], vec3(arr[1], arr[2], arr[3]))));
+
+			groupobject.Xfmi *= inverse(rotate(mat4(1.0), arr[0], vec3(arr[1], arr[2], arr[3])));
+			stack.push_back(rotate(mat4(1.0), arr[0], vec3(arr[1], arr[2], arr[3])));
+
 			i += 4;
 		}
 		else if ("sphere" == *i) {
-			mat4 temp(1.0);
-			for (auto object = inversestack.rbegin(); object != inversestack.rend(); object++) {
-				temp = temp * *object;
+			mat4 temp = groupobject.Xform;//were going to save this for a moment
+			groupobject.Xform = mat4(1.0);//set it to a new matrix
+			for (auto object = stack.rbegin(); object != stack.rend(); object++) {//this multiples from clostest to the top
+				groupobject.Xform = groupobject.Xform * *object;
 			}
-			groupobject.Xfmi = temp;
+			groupobject.Xform *= temp;
 
+			stack.clear();//we clear because the object is already transformed, if we did't do this the next sphere would be transformed by what is in the stack again
 			objects.push_back(groupobject); //this needs to call some sort of new operator to allocate memory for the thingy
-			//objects[0].print();
 			cout << "\n";
 		}
 		else if ("light" == *i) {
 			float arr[6];
 			for (int j = 0; j < 6; j++) {
-				//cout << *(i + j + 1) << " ";
 				arr[j] = stof(*(i + j + 1));
 			}
 
@@ -474,16 +480,33 @@ void processInput() {
 			groupobject.mat.set(arr[0], arr[1], arr[2], arr[3], arr[4], arr[5], arr[6]);
 			i += 7;
 		}
-		else if ("group" == line) {//when we find were at a new group, reset the current state
-			Object* temp = new Object();
-			groupobject = *temp;
-			inversestack.clear();
+		else if ("group" == *i) {
+			if (ingroup) { cerr << "\nError: called group while still in group.\n"; }
+			if (!stack.empty()) {
+			mat4 temp = groupobject.Xform;//were going to save this for a moment
+			groupobject.Xform = mat4(1.0);//set it to a new matrix
+			for (auto object = stack.rbegin(); object != stack.rend(); object++) {//this multiples from clostest to the top
+				groupobject.Xform = groupobject.Xform * *object;
+			}
+			groupobject.Xform *= temp;//this transforms it by whatever was done before the group
+		}
+			stack.clear();
+			ingroup = true;
 			std::cout << "\n";
 		}
-		else if ("groupend" == line) {//when we end the group, reset the current state
-			Object* temp = new Object();
-			groupobject = *temp;
-			inversestack.clear();
+		else if ("groupend" == *i) {
+			if(!ingroup) { cerr << "\nError: called groupend while not in a group.\n"; }
+			if (!stack.empty()) {//instead of reseting the state, we return it to what it was before group was called, whatever that was
+				for (auto object = stack.rbegin(); object != stack.rend(); object++) {
+					groupobject.Xfmi = groupobject.Xfmi * *object;//the opossite of inverse in not inverse
+				}
+				for (auto object = stack.begin(); object != stack.end(); object++) {
+					groupobject.Xform = groupobject.Xform * inverse(*object);//inverts whatever is there
+				}
+			}
+
+			stack.clear();
+			ingroup = false;
 			std::cout << "\n";
 		}
 		else
@@ -497,12 +520,12 @@ void processInput() {
 int main() {
 	
 	processInput();
-	
+
 	//Pixels[n][n][3]
 	float** Pixels[n];
-	for (int i = 0; i < n; i++) {
+	for (int i = 0; i <= n; i++) {
 		Pixels[i] = new float*[n];
-		for (int j = 0; j < n; j++) {
+		for (int j = 0; j <= n; j++) {
 			Pixels[i][j] = new float[3];
 		}
 	}
@@ -514,10 +537,11 @@ int main() {
 	Ray current(u);
 	//printVec(&u);
 	//printVec(&v);
-	for (float j = n-1; j >= 0; j--) {
+	int count = 0;
+	for (int j = 0; j <= n - 1; j++) {
 		v.y = d - ph * j - ph / 2;//calculate midpoint for row
 		//std::cout << v.y << "\n";
-		for (float i = 0; i <= n - 1; i++) {
+		for (int i = 0; i <= n - 1; i++) {
 			v.x = d - ph * i - ph / 2;//calculate midpoint for column
 			//std::cout << v.x << "\n";
 			current.dir = vec4(v - u, 0.0);
@@ -526,20 +550,23 @@ int main() {
 			//print(current.dir);
 			//print(&current.start);
 			vec3 Color = trace(&current);
-			Pixels[int(i)][int(j)][0] = Color.r;
-			Pixels[int(i)][int(j)][1] = Color.g;
-			Pixels[int(i)][int(j)][2] = Color.b;
+			Pixels[j][i][0] = Color.r;
+			Pixels[j][i][1] = Color.g;
+			Pixels[j][i][2] = Color.b;
+			count++;
 		}
 	}
+	std::cout << "Sucessfully shot all rays " << count << "\n";
+	count = 0;
 
 	unsigned char r, g, b;
 	FILE *picfile;
 	picfile = fopen("out.ppm", "w");
-	fprintf(picfile, "P6 # %dx%d Raytracer output\n%d %d\n255\n\n",
-		Xsize, Ysize, Xsize, Ysize);
+	fprintf(picfile, "P6# %dx%d Raytracer output\n%d %d\n255\n",
+			n,n,n,n);
 	// For each pixel
-	for (int j = Ysize - 1; j >= 0; j--) {// Y is flipped!
-		for (int i = 0; i < Xsize; i++) {
+	for (int j = 0; j < n; j++) {// Y is flipped!
+		for (int i = 0; i < n; i++) {
 			r = Pixels[i][j][0] * 255;
 			g = Pixels[i][j][1] * 255;
 			b = Pixels[i][j][2] * 255;
@@ -549,9 +576,11 @@ int main() {
 			//std::cout << Pixels[i][j][0] << " " << Pixels[i][j][1] << " " << Pixels[i][j][2] << " ";
 			// Remember though that this is a number between 0 and 255
 			// so might have to convert from 0-1.
+			count++;
 		}
 		//fprintf(picfile, "\n");
 	}
+	std::cout << "Sucessfully wrote to the PPM " << count << "\n";
 	fclose(picfile);
 	return 0;
 }
