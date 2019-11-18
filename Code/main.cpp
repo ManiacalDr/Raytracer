@@ -23,7 +23,7 @@ int n; // N*N will give you the size of the image
 const vec3 cam(0.0, 0.0, 1.0);
 vec3 backgroundColor(0.0,0.0,0.0);
 vec3 ambiant(0.0);
-vec4 defaultrefraction = vec4(vec3(0.0), 1.0002962);
+const vec4 defaultrefraction = vec4(vec3(0.0), 1.0002962);
 
 vec3 u = cam;
 vec3 v(0.0, 0.0, 0.0);
@@ -39,10 +39,17 @@ struct Material {
 	float emissivity;
 
 	Material() {
-		diffuse = vec3(double(0.0));
-		specular = vec3(double(0.0));
-		refraction = vec4(double(0.0));
+		diffuse = vec3(1.0);
+		specular = vec3(1.0);
+		refraction = defaultrefraction;
 		emissivity = 0;
+	}
+
+	Material operator*=(const Material& other) {
+		diffuse *= other.diffuse;
+		specular *= other.specular;
+		refraction *= other.refraction;
+		return *this;
 	}
 
 	void set(double dr, double dg, double db, double sr, double sg, double sb, double p) {
@@ -104,6 +111,14 @@ struct Ray { //Stores data for Ray
 	Ray(vec3 s, vec3 d) {
 		start = vec4(s, 1.0);
 		dir = vec4(d, 0.0);
+		isnorm = false;
+	}
+
+	Ray(vec3 s, vec3 d, vec3 dif, vec3 spec) {
+		start = vec4(s, 1.0);
+		dir = vec4(d, 0.0);
+		mat.diffuse = dif;
+		mat.specular = spec;
 		isnorm = false;
 	}
 
@@ -178,13 +193,12 @@ double vectorMag(const vec3 vec) {
 	return abs(sqrt(pow(vec.x, 2) + pow(vec.y, 2) + pow(vec.z, 2)));
 };
 
-Ray* reflect(Hitpoint* hitpoint, Ray* ray) {
+vec3* reflect(Hitpoint* hitpoint, Ray* ray) {
 	/*used to find the color that should be here if it is a reflective object*/
 	static int count = 0;
-
 	vec3 start = hitpoint->hitpoint + float(1.01) * hitpoint->normal;
 
-	if (count > 20) {
+	if (count > 0) {
 		count = 0;
 		return NULL;
 	}
@@ -193,9 +207,13 @@ Ray* reflect(Hitpoint* hitpoint, Ray* ray) {
 
 	if (!ray->isnorm)
 		ray->normalize();
+	
+	Ray* temp = new Ray(start, vec3(ray->dir) - 2 * dot(hitpoint->normal, vec3(ray->dir)) * hitpoint->normal);
 
-	Ray* temp = new Ray(start, -vec3(ray->dir) - 2 * dot(hitpoint->normal, -vec3(ray->dir)) * hitpoint->normal);
-	return temp;
+	vec3* Color = new vec3(ray->mat.specular * trace(temp));
+	//print(*Color);
+	//print( *Color);
+	return Color;
 };
 
 //Ray rafraction(vec3* hitpoint, Ray* ray){//Need to fix the Math in this one
@@ -223,7 +241,6 @@ vec3 PhongIllumination(const Hitpoint* point,const Ray* ray,const Light* light) 
 	float lightatt = min(1/(lightdist*.02) , 1.0);
 
 	if (lambertian > 0.0) {
-		//lambertian = 0;
 		float specAngle = max(dot(reflectDir,float(1.001) * viewDir), float(0.0));
 		specular = pow(specAngle, ray->mat.emissivity);
 	}
@@ -248,12 +265,18 @@ vec3 Shade(Hitpoint* hitpoint, Ray* ray) {
 		if (!Shadow(hitpoint, ray, &light));
 			Color = Color + PhongIllumination(hitpoint, ray, &light);
 	}
-	Ray* space = reflect(hitpoint, ray);
-	if (!space) return Color;
-	if (ray->mat.emissivity > 0) Color += ray->mat.specular * trace(space);
+	if (ray->mat.emissivity > 0) {
+		vec3* space = reflect(hitpoint, ray);
+		if (!space) return Color;
+		else Color = Color + *space;
+	}
 	//if refractive Color += trace(refraction(point, ray)); 376030
 
-	if (Color.x > 1.5 || Color.y > 1.5 || Color.z > 1.5) { std::cerr << "Error: light over 150% at some pixel\n"; }// print(Color); Color = vec3(1.0); }
+	if (Color.x > 1.5 || Color.y > 1.5 || Color.z > 1.5) { std::cerr << "Error: light over 150% at some pixel\n"; print(Color);
+	Color.r = clamp(Color.r, float(0), float(1.0));
+	Color.g = clamp(Color.g, float(0), float(1.0));
+	Color.b = clamp(Color.b, float(0), float(1.0));
+	}
 	return Color;
 };
 
@@ -577,9 +600,9 @@ int main(int argc, char* argv[]) {
 	// For each pixel
 	for (int j = 0; j <= n-1; j++) {// Y is flipped!
 		for (int i = n-1; i >= 0; i--) {
-			r = int(clamp(Pixels[i][j][0], float(0.0), float(1.0)) * 255);
-			g = int(clamp(Pixels[i][j][1], float(0.0), float(1.0)) * 255);
-			b = int(clamp(Pixels[i][j][2], float(0.0), float(1.0)) * 255);
+			r = int(clamp(Pixels[i][j][0], float(0), float(1.0)) * 255);
+			g = int(clamp(Pixels[i][j][1], float(0), float(1.0)) * 255);
+			b = int(clamp(Pixels[i][j][2], float(0), float(1.0)) * 255);
 			fprintf(picfile, "%c%c%c", r, g, b);
 			//std::cout << int(Pixels[i][j][0] * 255) << " " << int(Pixels[i][j][1] * 255) << " " << int(Pixels[i][j][2] * 255) << " \n";
 			// Remember though that this is a number between 0 and 255
