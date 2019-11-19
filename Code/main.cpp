@@ -1,6 +1,5 @@
 /*Uses the Function p = u + vt to determine the color of a pixel after shooting out a ray
 ran into problems with pointers pointing to uninitlized memory and trying to set a value there*/
-//https://stackoverflow.com/questions/1986378/how-to-set-up-quadratic-equation-for-a-ray-sphere-intersection
 //https://stackoverflow.com/questions/20028396/how-could-declaring-a-large-2d-array-crash-a-program
 // Include standard headers
 #include <stdio.h>
@@ -17,13 +16,15 @@ ran into problems with pointers pointing to uninitlized memory and trying to set
 using namespace glm;
 
 int raycount = 0;
+int reflectcount = 0;
+int refractcount = 0;
 float d;
 int n; // N*N will give you the size of the image
 
 const vec3 cam(0.0, 0.0, 1.0);
 vec3 backgroundColor(0.0,0.0,0.0);
 vec3 ambiant(0.0);
-const vec4 defaultrefraction = vec4(vec3(0.0), 1.0002962);
+const vec4 defaultrefraction = vec4(vec3(0.0), 1.0003);
 
 vec3 u = cam;
 vec3 v(0.0, 0.0, 0.0);
@@ -45,13 +46,6 @@ struct Material {
 		emissivity = 0;
 	}
 
-	Material operator*=(const Material& other) {
-		diffuse *= other.diffuse;
-		specular *= other.specular;
-		refraction *= other.refraction;
-		return *this;
-	}
-
 	void set(double dr, double dg, double db, double sr, double sg, double sb, double p) {
 		diffuse = vec3(dr, dg, db);
 		specular = vec3(sr, sg, sb);
@@ -63,7 +57,7 @@ struct Material {
 	}
 
 	void print() const{
-		printf("Material: \nDiffuse: %f, %f, %f\nSpecular: %f, %f, %f\nEmissivity: %f\n\n", diffuse.x, diffuse.y, diffuse.z, specular.x, specular.y, specular.z, emissivity);
+		printf("Material: \nDiffuse: %f, %f, %f\nSpecular: %f, %f, %f\nRefraction: %f, %f, %f, %f \nEmissivity: %f\n\n", diffuse.x, diffuse.y, diffuse.z, specular.x, specular.y, specular.z,refraction.x, refraction.y, refraction.z, refraction.w, emissivity);
 	}
 };
 
@@ -83,11 +77,9 @@ struct Object { // this could be turned into multiple types of objects by changi
 		mat = m;
 	}
 
-	Object(mat4 *xform, mat4 *xfmi, Material *m) {
-		Xform = *xform;
-		Xfmi = *xfmi;
-		mat = *m;
-	}
+	virtual ~Object() {};
+
+	virtual double* calcIntersection(vec3, vec3, double&) { return NULL; };
 
 	void print() const{
 		printf("Object: \nXform:\n%f, %f, %f, %f\n%f, %f, %f, %f\n%f, %f, %f, %f\n%f, %f, %f, %f\nXfmi: \n%f, %f, %f, %f\n%f, %f, %f, %f\n%f, %f, %f, %f\n%f, %f, %f, %f\n", Xform[0][0], Xform[1][0], Xform[2][0], Xform[3][0], Xform[0][1], Xform[1][1], Xform[2][1], Xform[3][1], Xform[0][2], Xform[1][2], Xform[2][2], Xform[3][2], Xform[0][3], Xform[1][3], Xform[2][3], Xform[3][3],
@@ -96,22 +88,215 @@ struct Object { // this could be turned into multiple types of objects by changi
 	}
 };
 
+struct Sphere : virtual public Object{
+	Sphere() {
+		Xform = mat4(1.0);
+		Xfmi = mat4(1.0);
+	}
+
+	Sphere(mat4 xform, mat4 xfmi, Material m) {
+		Xform = xform;
+		Xfmi = xfmi;
+		mat = m;
+	}
+
+	double* quadratic(double A, double B, double C, double* ret) {//we pass a pointer in so this has some initlized memory in the calling function to set the final value too.
+
+	//std::cout << A << ", " << B << ", " << C << "\n";
+
+		double rad = (B * B) - (4 * A * C);
+		double t1;
+
+		/*if (rad > 0.0)
+			std::cout << rad << "\n";*/
+
+		if (rad <= 0.0)
+		{
+			if (ret)
+				return NULL;
+		}
+
+		double rootrad = sqrt(rad);
+
+		if (B > 0)
+			t1 = (-B - rootrad) / (2 * A);
+		else
+			t1 = (-B + rootrad) / (2 * A);
+		double t2 = C / (A*t1);
+
+		*ret = t2;//what was the point of this again?
+		return ret;
+	}
+
+	double* calcIntersection(vec3 u, vec3 v, double& ret) override {
+		double space;//is allocated memory to point t to
+		double* t = NULL;
+
+		t = quadratic(dot(v, v), 2.0 * dot(u, v), dot(u, u) - 1.0, &space);
+
+		if (!t)
+			return NULL;
+		if (*t < 0.0)//this determines if it is behind the start of the ray
+			return NULL;
+
+		ret = *t;
+
+		return &ret;
+	}
+};
+
+struct Cylinder : virtual public Object {
+	Cylinder() {
+		Xform = mat4(1.0);
+		Xfmi = mat4(1.0);
+	}
+
+	Cylinder(mat4 xform, mat4 xfmi, Material m) {
+		Xform = xform;
+		Xfmi = xfmi;
+		mat = m;
+	}
+
+	double* quadratic(double A, double B, double C, double* ret) {//we pass a pointer in so this has some initlized memory in the calling function to set the final value too.
+		return NULL;
+	}
+
+	double* calcIntersection(vec3 u, vec3 v, double& ret) override {
+		return NULL;
+	}
+};
+
+struct Cone : virtual public Object {
+	Cone() {
+		Xform = mat4(1.0);
+		Xfmi = mat4(1.0);
+	}
+
+	Cone(mat4 xform, mat4 xfmi, Material m) {
+		Xform = xform;
+		Xfmi = xfmi;
+		mat = m;
+	}
+
+	double* quadratic(double A, double B, double C, double* ret) {//we pass a pointer in so this has some initlized memory in the calling function to set the final value too.
+		return NULL;
+	}
+
+	double* calcIntersection(vec3 u, vec3 v, double& ret) override {
+		return NULL;
+	}
+};
+
+struct Paraboloid : virtual public Object {
+	Paraboloid() {
+		Xform = mat4(1.0);
+		Xfmi = mat4(1.0);
+	}
+
+	Paraboloid(mat4 xform, mat4 xfmi, Material m) {
+		Xform = xform;
+		Xfmi = xfmi;
+		mat = m;
+	}
+
+	double* quadratic(double A, double B, double C, double* ret) {//we pass a pointer in so this has some initlized memory in the calling function to set the final value too.
+		return NULL;
+	}
+
+	double* calcIntersection(vec3 u, vec3 v, double& ret) override {
+		return NULL;
+	}
+};
+
+struct Hyperboloid : virtual public Object {
+	Hyperboloid() {
+		Xform = mat4(1.0);
+		Xfmi = mat4(1.0);
+	}
+
+	Hyperboloid(mat4 xform, mat4 xfmi, Material m) {
+		Xform = xform;
+		Xfmi = xfmi;
+		mat = m;
+	}
+
+	double* quadratic(double A, double B, double C, double* ret) {//we pass a pointer in so this has some initlized memory in the calling function to set the final value too.
+		return NULL;
+	}
+
+	double* calcIntersection(vec3 u, vec3 v, double& ret) override {
+		return NULL;
+	}
+};
+
+struct Torus : virtual public Object {
+	Torus() {
+		Xform = mat4(1.0);
+		Xfmi = mat4(1.0);
+	}
+
+	Torus(mat4 xform, mat4 xfmi, Material m) {
+		Xform = xform;
+		Xfmi = xfmi;
+		mat = m;
+	}
+
+	double* quadratic(double A, double B, double C, double* ret) {//we pass a pointer in so this has some initlized memory in the calling function to set the final value too.
+		return NULL;
+	}
+
+	double* calcIntersection(vec3 u, vec3 v, double& ret) override {
+		return NULL;
+	}
+};
+
+struct Triangle : virtual public Object {
+	Triangle() {
+		Xform = mat4(1.0);
+		Xfmi = mat4(1.0);
+	}
+
+	Triangle(mat4 xform, mat4 xfmi, Material m) {
+		Xform = xform;
+		Xfmi = xfmi;
+		mat = m;
+	}
+
+	double* quadratic(double A, double B, double C, double* ret) {//we pass a pointer in so this has some initlized memory in the calling function to set the final value too.
+		return NULL;
+	}
+
+	double* calcIntersection(vec3 u, vec3 v, double& ret) override {
+		return NULL;
+	}
+};
+
 struct Ray { //Stores data for Ray
 	vec4 start;//is the Eye
 	vec4 dir;
-	Material mat;//does this make sense? should the Ray store full material data or just some color information?
-	bool isnorm;
+	Material mat;//this stores the return material
+	double currentRefraction;
+	bool isnorm;//this flag is false when using shadow rays
 
 	Ray(vec3 vec) {
 		start = vec4(vec, 1.0);
 		dir = vec4(0.0, 0.0, 0.0, 0.0);
 		isnorm = false;
+		currentRefraction = defaultrefraction.w;
 	}
 
 	Ray(vec3 s, vec3 d) {
 		start = vec4(s, 1.0);
 		dir = vec4(d, 0.0);
 		isnorm = false;
+		currentRefraction = defaultrefraction.w;
+	}
+
+	Ray(vec3 s, vec3 d, bool isn) {
+		start = vec4(s, 1.0);
+		dir = vec4(d, 0.0);
+		isnorm = isn;
+		currentRefraction = defaultrefraction.w;
 	}
 
 	Ray(vec3 s, vec3 d, vec3 dif, vec3 spec) {
@@ -120,6 +305,11 @@ struct Ray { //Stores data for Ray
 		mat.diffuse = dif;
 		mat.specular = spec;
 		isnorm = false;
+		currentRefraction = defaultrefraction.w;
+	}
+
+	void setTrue() {
+		isnorm = true;
 	}
 
 	void normalize() {
@@ -128,7 +318,7 @@ struct Ray { //Stores data for Ray
 	}
 
 	void print() const{
-		printf("Ray:\nStart: %f, %f, %f\nDirection: %f, %f, %f\n", start.x, start.y, start.z, dir.x, dir.y, dir.z);
+		printf("Ray:\nStart: %f, %f, %f, %f\nDirection: %f, %f, %f, %f\n", start.x, start.y, start.z, start.w, dir.x, dir.y, dir.z, dir.w);
 		mat.print();
 	}
 };
@@ -167,9 +357,6 @@ struct Light { //Stores our light data, its position in world space and the colo
 	}
 };
 
-
-double* quadratic(double, double, double, double*);
-double* calcIntersection(vec3, vec3, double&);
 Hitpoint* closestIntersection(Ray*, Hitpoint*);
 vec3 trace(Ray*);
 
@@ -187,69 +374,89 @@ void print(const mat4 Xform) {
 
 std::vector<Light> lights;
 
-std::vector<Object> objects;
+std::vector<Object*> objects;
 
-double vectorMag(const vec3 vec) {
-	return abs(sqrt(pow(vec.x, 2) + pow(vec.y, 2) + pow(vec.z, 2)));
+float dot(const vec3 left, const vec3 right) {
+	return left.x * right.x + left.y * right.y + left.z * right.z;
 };
 
-vec3* reflect(Hitpoint* hitpoint, Ray* ray) {
+float vectorMag(const vec3* vec) {
+	if (!vec)
+		return 0.0;
+	return abs(sqrt(pow(vec->x, 2) + pow(vec->y, 2) + pow(vec->z, 2)));
+};
+
+vec3* reflection(Hitpoint* hitpoint, Ray* ray) {
 	/*used to find the color that should be here if it is a reflective object*/
-	static int count = 0;
-	vec3 start = hitpoint->hitpoint + float(1.01) * hitpoint->normal;
+	vec3 start = hitpoint->hitpoint + (float(0.01) * hitpoint->normal);
+	reflectcount++;
 
-	if (count > 0) {
-		count = 0;
-		return NULL;
+	if (reflectcount > 20) {//resets the count after we have gone through a previous thing
+		reflectcount = 0;
 	}
-
-	count++;
 
 	if (!ray->isnorm)
 		ray->normalize();
 	
-	Ray* temp = new Ray(start, vec3(ray->dir) - 2 * dot(hitpoint->normal, vec3(ray->dir)) * hitpoint->normal);
+	Ray* temp = new Ray(start, vec3(ray->dir) - 2 * dot(hitpoint->normal, vec3(ray->dir)) * hitpoint->normal, true);
 
 	vec3* Color = new vec3(ray->mat.specular * trace(temp));
-	//print(*Color);
-	//print( *Color);
+
+	if (vectorMag(Color) < .01) {//this resets the count after we have gone through it
+		reflectcount = 0;
+		return NULL;
+	}
+
 	return Color;
 };
 
-//Ray rafraction(vec3* hitpoint, Ray* ray){//Need to fix the Math in this one
-//	/*used to find the color that should be here if it is a rafractive object*/
-//	vec3 normal = normalize(*hitpoint);
-//	double ni = dot(n, -r.d); 
-//	double eta = current_index / new_index; 
-//	return Ray((x, eta*ni - sqrt(1 - eta * eta*(1 - ni * ni)))*n + eta * r.d);
-//	return Ray(*hitpoint, vec3(ray->dir) - 2 * dot(vec3(ray->dir), normal)*normal);
-//};
+vec3* refraction(Hitpoint* hitpoint, Ray* ray){
+	/*used to find the color that should be here if it is a rafractive object*/
+	vec3 start = hitpoint->hitpoint - float(.01) * hitpoint->normal;//we move the hitpoint into the object to guarentee that the first hit is not with the object itself
+	float ni = dot(hitpoint->normal, -ray->dir); 
+	float eta = ray->currentRefraction / ray->mat.refraction.w;
+	refractcount++;
+	//std::cout << eta << "\n";
+	if (refractcount > 10) {//this resets the count after we have gone through it
+		refractcount = 0;
+	}
+	float rad = 1 - eta * eta*(1 - ni * ni);
+	if (rad < 0) {//total internal refraction
+		return NULL;
+	}
+
+	Ray* temp = new Ray(start, eta*ni - sqrt(rad)*hitpoint->normal + eta * vec3(ray->dir), true);
+	temp->currentRefraction = ray->mat.refraction.w;
+	vec3* Color = new vec3(vec3(ray->mat.refraction) * trace(temp));
+
+	if (vectorMag(Color) < .01) {
+		refractcount = 0;
+		return NULL;
+	}
+
+	return Color;
+};
 
 vec3 PhongIllumination(const Hitpoint* point,const Ray* ray,const Light* light) {//need to fix this, currently ambiant is added for each light, incorrect
 	/*Calculate the phong illumination model*/
-
-	//ray->print();
-	//light->print();
 	
 	vec3 lightDir = normalize(light->position - point->hitpoint);
 	vec3 reflectDir = -lightDir - 2 * dot(point->normal, -lightDir)*point->normal;
 	vec3 viewDir = normalize(vec3(ray->start) - point->hitpoint);
 
-	double lightdist = vectorMag(light->position - point->hitpoint);
 	float lambertian = max(dot(lightDir, point->normal), float(0.0));
 	float specular = 0.0;
-	float lightatt = min(1/(lightdist*.02) , 1.0);
 
 	if (lambertian > 0.0) {
-		float specAngle = max(dot(reflectDir,float(1.001) * viewDir), float(0.0));
+		float specAngle = max(dot(reflectDir, viewDir), float(0.0));
 		specular = pow(specAngle, ray->mat.emissivity);
 	}
-	return lightatt * light->color * vec3((lambertian * ray->mat.diffuse) + (specular * ray->mat.specular));
+	return light->color * vec3((lambertian * ray->mat.diffuse) + (specular * ray->mat.specular));
 };
 
 bool Shadow(Hitpoint* point,const Ray* ray,const Light* light) {
 	/*Check between the object and the light to see if this new ray intersects another object*/
-	Ray lightRay(point->hitpoint, light->position - point->hitpoint);
+	Ray lightRay(point->hitpoint + float(.01) * point->normal, light->position - point->hitpoint);
 	Hitpoint* test = closestIntersection(&lightRay, test);
 	if(test) {//if we return null, either nothing was hit, or all other objects are past the light, not casting a shadow
 		return true;
@@ -265,65 +472,29 @@ vec3 Shade(Hitpoint* hitpoint, Ray* ray) {
 		if (!Shadow(hitpoint, ray, &light));
 			Color = Color + PhongIllumination(hitpoint, ray, &light);
 	}
-	if (ray->mat.emissivity > 0) {
-		vec3* space = reflect(hitpoint, ray);
-		if (!space) return Color;
-		else Color = Color + *space;
-	}
-	//if refractive Color += trace(refraction(point, ray)); 376030
 
-	if (Color.x > 1.5 || Color.y > 1.5 || Color.z > 1.5) { std::cerr << "Error: light over 150% at some pixel\n"; print(Color);
-	Color.r = clamp(Color.r, float(0), float(1.0));
-	Color.g = clamp(Color.g, float(0), float(1.0));
-	Color.b = clamp(Color.b, float(0), float(1.0));
+	if (ray->mat.emissivity >= 0) {
+		if (reflectcount <= 20) {
+			vec3* space = reflection(hitpoint, ray);
+			if(space)
+				Color = Color + *space;
+		}
+	}
+
+	if (ray->mat.refraction.w > defaultrefraction.w){
+		if (refractcount <= 10) {
+			vec3* space = refraction(hitpoint, ray);
+			if (space) //This checks to see that something did not happen in rafract to not return a value
+				Color = Color + *space;
+			else
+				refractcount = 0;
+		}
+	}
+		
+
+	if (Color.x > 1.5 || Color.y > 1.5 || Color.z > 1.5) { //std::cerr << "Error: light over 150% at some pixel\n"; print(Color);
 	}
 	return Color;
-};
-
-double* quadratic(double A, double B, double C, double* ret) {//we pass a pointer in so this has some initlized memory in the calling function to set the final value too.
-
-	//std::cout << A << ", " << B << ", " << C << "\n";
-
-	double rad = (B * B) - (4 * A * C);
-	double t1;
-
-	/*if (rad > 0.0)
-		std::cout << rad << "\n";*/
-
-	if (rad <= 0.0)
-	{
-		if (ret) 
-			return NULL;
-	}
-
-	double rootrad = sqrt(rad);
-
-	if (B > 0)
-		t1 = (-B - rootrad) / (2 * A);
-	else
-		t1 = (-B + rootrad) / (2 * A);
-	double t2 = C / (A*t1);
-
-	*ret = t2;//what was the point of this again?
-	return ret;
-};
-
-double* calcIntersection(vec3 u, vec3 v, double& ret){
-	double space;//is allocated memory to point t to
-	double* t = NULL;
-	t = quadratic(dot(v, v), 2.0 * dot(u, v), dot(u, u) - 1.0, &space);
-	//print(u);
-	//print(v);
-	
-	if (!t)
-		return NULL;
-	//std::cout << *t << " \n";
-	if (*t < 0.0)//this determines if it is behind the start of the ray
-		return NULL;
-	
-	ret = *t;
-
-	return &ret;
 };
 
 Hitpoint* closestIntersection(Ray *ray, Hitpoint* ret) {// return the intersection point, surface normal, surface, surface attributes, etc.
@@ -331,8 +502,12 @@ Hitpoint* closestIntersection(Ray *ray, Hitpoint* ret) {// return the intersecti
 	double t;//some initlized memory to point our pointers to, has to be here because of scope
 	double* current = NULL;
 	double* smallest = NULL;
-	for (const Object &object : objects) {
-		current = calcIntersection(vec3(object.Xfmi * ray->start), vec3(object.Xfmi * ray->dir), t);//we "downcast" these vectors so that we can take the proper dot product of them
+	static Object* refracthist = NULL;
+	Object* lastobject = NULL;
+	
+	for (auto temp = objects.begin(); temp < objects.end(); temp++) {
+		Object* object = *temp;
+		current = object->calcIntersection(vec3(object->Xfmi * ray->start), vec3(object->Xfmi * ray->dir), t);//we "downcast" these vectors so that we can take the proper dot product of them
 		if (current) {//We hit an object
 			if (!ray->isnorm) {//if we are checking a shadow ray
 				if (*current < 1) return ret = new Hitpoint;//if we hit an object, just return any value
@@ -342,28 +517,48 @@ Hitpoint* closestIntersection(Ray *ray, Hitpoint* ret) {// return the intersecti
 					smallest = new double;
 					*smallest = *current;
 					ret = new Hitpoint;
-					ret->hitpoint.x = ray->start.x + *smallest * ray->dir.x;
-					ret->hitpoint.y = ray->start.y + *smallest * ray->dir.y;
-					ret->hitpoint.z = ray->start.z + *smallest * ray->dir.z;
-					ret->normal = vec3(transpose(object.Xfmi) * (object.Xfmi * vec4(ret->hitpoint, 1.0)));
-					ray->mat = object.mat;
+					ret->hitpoint.x = ray->start.x + (*smallest * ray->dir.x);
+					ret->hitpoint.y = ray->start.y + (*smallest * ray->dir.y);
+					ret->hitpoint.z = ray->start.z + (*smallest * ray->dir.z);
+					ret->normal = vec3(transpose(object->Xfmi) * vec4(vec3(object->Xfmi * vec4(ret->hitpoint, 1.0)), 0.0));
+					ray->mat = object->mat;
+					if (object->mat.refraction.w > defaultrefraction.w)//if this is a rafractive object
+						refracthist = object;//we will store the object in a rafract history to know what object we hit
+					else
+						refracthist = NULL;//we need to do this each time based on where in the vector the object is
+					lastobject = object;
 				} 
 				else {
 					if (*current < *smallest) { //If the new intersection is less then the current stored, change the current
 						*smallest = *current;
-						ret->hitpoint.x = ray->start.x + *smallest * ray->dir.x;
-						ret->hitpoint.y = ray->start.y + *smallest * ray->dir.y;
-						ret->hitpoint.z = ray->start.z + *smallest * ray->dir.z;
-						ret->normal = vec3(transpose(object.Xfmi) * vec4(vec3(object.Xfmi * vec4(ret->hitpoint, 1.0)),0.0));
-						ray->mat = object.mat;
+						ret->hitpoint.x = ray->start.x + (*smallest * ray->dir.x);
+						ret->hitpoint.y = ray->start.y + (*smallest * ray->dir.y);
+						ret->hitpoint.z = ray->start.z + (*smallest * ray->dir.z);
+						ret->normal = vec3(transpose(object->Xfmi) * vec4(vec3(object->Xfmi * vec4(ret->hitpoint, 1.0)), 0.0));
+						ray->mat = object->mat;
+						if (object->mat.refraction.w > defaultrefraction.w)//if this is a rafractive object
+							refracthist = object;//we will store the object in a rafract history to know what object we hit
+						else
+							refracthist = NULL;//we need to do this each time based on where in the vector the object is
+						lastobject = object;
 					}
 				}
 			}
 		}
 	}
+
+	if (refracthist == lastobject && ray->mat.refraction.w > defaultrefraction.w)//if we are using a rafraction ray inside of an object, and we hit the same refraction object we change the current index to the default as we left the object
+	{
+		ray->currentRefraction = defaultrefraction.w;
+	}
+
+	//ray->mat.print();
+	//std::cout << ray->currentRefraction << "\n";
+
 	if (!smallest)//nothing was hit
 		return NULL;
 	ret->normal = normalize(ret->normal);
+	ret->hitpoint = ret->hitpoint + (float(0.01) * ret->normal);
 	//print(ret->hitpoint);
 	//print(ret->normal);
 	return ret;
@@ -411,7 +606,6 @@ void processInput(const std::string& file) {
 
 	bool ingroup = false;
 
-	Object* groupobject;
 	vector<mat4> CTM;
 	vector<mat4> CIM;
 	vector<Material> MAT;
@@ -421,12 +615,12 @@ void processInput(const std::string& file) {
 	MAT.push_back(Material());
 
 	for (auto i = tokens.begin(); i < tokens.end(); i++) {
-		std::cout << *i << " ";
-		if ("#" == *i){ std::cout << "\n"; }
+		//std::cout << *i << " ";
+		if ("#" == *i);// { std::cout << "\n"; }
 		else if ("view" == *i) {
 			n = stoi(*(i + 1));
 			d = stof(*(i + 2));
-			printf("%i %f\n", n,d);
+			//printf("%i %f\n", n,d);
 			i += 2;
 		}
 		else if ("scale" == *i) {
@@ -434,7 +628,7 @@ void processInput(const std::string& file) {
 			for (int j = 0; j < 3; j++) {
 				arr[j] = stof(*(i + j + 1));
 			}
-			printf("%f %f %f\n", arr[0], arr[1], arr[2]);
+			//printf("%f %f %f\n", arr[0], arr[1], arr[2]);
 			CTM[level] = CTM[level] * scale(mat4(1.0), vec3(arr[0], arr[1], arr[2]));
 			CIM[level] = inverse(scale(mat4(1.0), vec3(arr[0], arr[1], arr[2]))) * CIM[level];
 			//print(CIM[level]);
@@ -445,7 +639,7 @@ void processInput(const std::string& file) {
 			for (int j = 0; j < 3; j++) {
 				arr[j] = stof(*(i + j + 1));
 			}
-			printf("%f %f %f\n", arr[0], arr[1], arr[2]);
+			//printf("%f %f %f\n", arr[0], arr[1], arr[2]);
 			CTM[level] = CTM[level] * translate(mat4(1.0), vec3(arr[0], arr[1], arr[2]));
 			CIM[level] = inverse(translate(mat4(1.0), vec3(arr[0], arr[1], arr[2]))) * CIM[level];
 			//print(CIM[level]);
@@ -456,18 +650,53 @@ void processInput(const std::string& file) {
 			for (int j = 0; j < 4; j++) {
 				arr[j] = stof(*(i + j + 1));
 			}
-			printf("%f %f %f %f\n", arr[0], arr[1], arr[2], arr[3]);
-			CTM[level] = CTM[level] * rotate(mat4(1.0), arr[0], vec3(arr[1], arr[2], arr[3]));
-			CIM[level] = inverse(rotate(mat4(1.0), arr[0], vec3(arr[1], arr[2], arr[3]))) * CIM[level];
+			//printf("%f %f %f %f\n", arr[0], arr[1], arr[2], arr[3]);
+			CTM[level] = CTM[level] * rotate(mat4(1.0),arr[0], vec3(arr[1], arr[2], arr[3]));
+			CIM[level] = inverse(rotate(mat4(1.0), radians(arr[0]), vec3(arr[1], arr[2], arr[3]))) * CIM[level];
 			//print(CIM[level]);
 			i += 4;
 		}
 		else if ("sphere" == *i) {
-			groupobject = new Object(CTM[level], CIM[level], MAT[level]);
-			//groupobject->print();
-			objects.push_back(*groupobject); //this needs to call some sort of new operator to allocate memory for the thingy
-			delete groupobject;
-			cout << "\n";
+			Sphere* object = new Sphere(CTM[level], CIM[level], MAT[level]);
+			//object->print();
+			objects.push_back(object); //this needs to call some sort of new operator to allocate memory for the thingy
+			//cout << "\n";
+		}
+		else if ("cylinder" == *i) {
+			Cylinder* object = new Cylinder(CTM[level], CIM[level], MAT[level]);
+			//object->print();
+			objects.push_back(object); //this needs to call some sort of new operator to allocate memory for the thingy
+			//cout << "\n";
+		}
+		else if ("cone" == *i) {
+			Cone* object = new Cone(CTM[level], CIM[level], MAT[level]);
+			//object->print();
+			objects.push_back(object); //this needs to call some sort of new operator to allocate memory for the thingy
+			//cout << "\n";
+		}
+		else if ("paraboloid" == *i) {
+			Paraboloid* object = new Paraboloid(CTM[level], CIM[level], MAT[level]);
+			//object->print();
+			objects.push_back(object); //this needs to call some sort of new operator to allocate memory for the thingy
+			//cout << "\n";
+		}
+		else if ("hyperboloid" == *i) {
+			Hyperboloid* object = new Hyperboloid(CTM[level], CIM[level], MAT[level]);
+			//object->print();
+			objects.push_back(object); //this needs to call some sort of new operator to allocate memory for the thingy
+			//cout << "\n";
+		}
+		else if ("torus" == *i) {
+			Torus* object = new Torus(CTM[level], CIM[level], MAT[level]);
+			//object->print();
+			objects.push_back(object); //this needs to call some sort of new operator to allocate memory for the thingy
+			//cout << "\n";
+		}
+		else if ("triangle" == *i) {
+			Triangle* object = new Triangle(CTM[level], CIM[level], MAT[level]);
+			//object->print();
+			objects.push_back(object); //this needs to call some sort of new operator to allocate memory for the thingy
+			//cout << "\n";
 		}
 		else if ("light" == *i) {
 			float arr[6];
@@ -475,7 +704,7 @@ void processInput(const std::string& file) {
 				arr[j] = stof(*(i + j + 1));
 			}
 
-			printf("%f %f %f %f %f %f\n", arr[0], arr[1], arr[2], arr[3], arr[4], arr[5]);
+			//printf("%f %f %f %f %f %f\n", arr[0], arr[1], arr[2], arr[3], arr[4], arr[5]);
 			lights.push_back(Light(arr[0], arr[1], arr[2], arr[3], arr[4], arr[5]));
 			i += 6;
 		}
@@ -485,7 +714,7 @@ void processInput(const std::string& file) {
 				arr[j] = stof(*(i + j + 1));
 			}
 
-			printf("%f %f %f\n", arr[0], arr[1], arr[2]);
+			//printf("%f %f %f\n", arr[0], arr[1], arr[2]);
 			backgroundColor = vec3(arr[0], arr[1], arr[2]);
 			i += 3;
 		}
@@ -495,7 +724,7 @@ void processInput(const std::string& file) {
 				arr[j] = stof(*(i + j + 1));
 			}
 
-			printf("%f %f %f\n", arr[0], arr[1], arr[2]);
+			//printf("%f %f %f\n", arr[0], arr[1], arr[2]);
 			ambiant = vec3(arr[0], arr[1], arr[2]);
 			i += 3;
 		}
@@ -505,7 +734,7 @@ void processInput(const std::string& file) {
 				arr[j] = stof(*(i + j + 1));
 			}
 
-			printf("%f %f %f %f\n", arr[0], arr[1], arr[2], arr[3]);
+			//printf("%f %f %f %f\n", arr[0], arr[1], arr[2], arr[3]);
 			MAT[level].refrac(arr[0], arr[1], arr[2], arr[3]);
 			i += 4;
 		}
@@ -514,7 +743,7 @@ void processInput(const std::string& file) {
 			for (int j = 0; j < 7; j++) {
 				arr[j] = stof(*(i + j + 1));
 			}
-			printf("%f %f %f %f %f %f %f\n", arr[0], arr[1], arr[2], arr[3], arr[4], arr[5], arr[6]);
+			//printf("%f %f %f %f %f %f %f\n", arr[0], arr[1], arr[2], arr[3], arr[4], arr[5], arr[6]);
 			MAT[level].set(arr[0], arr[1], arr[2], arr[3], arr[4], arr[5], arr[6]);
 			i += 7;
 		}
@@ -532,13 +761,13 @@ void processInput(const std::string& file) {
 				MAT[level] = MAT[level - 1];
 			}
 			
-			std::cout << "\n";
+			//std::cout << "\n";
 		}
 		else if ("groupend" == *i) {//should move back up one level of the scene graph
 			if (level == 0) cerr << "Error: called groupend without calling group";
 			else
 				level--;
-			std::cout << "\n";
+			//std::cout << "\n";
 		}
 		else
 			cout << "\nError: could not read line " << count << " in file. Line: " << *i << "\n";
@@ -567,7 +796,7 @@ int main(int argc, char* argv[]) {
 			Pixels[i][j] = new float[3];
 		}
 	}
-	std::cout << "Allocated Pixels array\n";
+	//std::cout << "Allocated Pixels array\n";
 
 	pw = 2 * d / n;
 	ph = 2 * d / n;
@@ -582,6 +811,7 @@ int main(int argc, char* argv[]) {
 			v.x = d - ph * i - ph / 2;//calculate midpoint for column
 			//std::cout << v.x << "\n";
 			current.dir = vec4(v - u, 0.0);
+			current.currentRefraction = defaultrefraction.w;//this is to make sure it is the right value
 			current.normalize();
 			vec3 Color = trace(&current);
 			Pixels[i][j][0] = Color.r;
