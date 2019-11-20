@@ -24,7 +24,7 @@ int n; // N*N will give you the size of the image
 const vec3 cam(0.0, 0.0, 1.0);
 vec3 backgroundColor(0.0,0.0,0.0);
 vec3 ambiant(0.0);
-const vec4 defaultrefraction = vec4(vec3(0.0), 1.0003);
+const vec4 defaultrefraction = vec4(vec3(0.0), 1.000295);
 
 vec3 u = cam;
 vec3 v(0.0, 0.0, 0.0);
@@ -469,7 +469,7 @@ vec3 Shade(Hitpoint* hitpoint, Ray* ray) {
 	vec3 Color = ambiant * ray->mat.diffuse;
 
 	for (const Light &light : lights){
-		if (!Shadow(hitpoint, ray, &light));
+		if (!Shadow(hitpoint, ray, &light))
 			Color = Color + PhongIllumination(hitpoint, ray, &light);
 	}
 
@@ -481,15 +481,15 @@ vec3 Shade(Hitpoint* hitpoint, Ray* ray) {
 		}
 	}
 
-	if (ray->mat.refraction.w > defaultrefraction.w){
-		if (refractcount <= 10) {
-			vec3* space = refraction(hitpoint, ray);
-			if (space) //This checks to see that something did not happen in rafract to not return a value
-				Color = Color + *space;
-			else
-				refractcount = 0;
-		}
-	}
+	//if (ray->mat.refraction.w > defaultrefraction.w){
+	//	if (refractcount <= 10) {
+	//		vec3* space = refraction(hitpoint, ray);
+	//		if (space) //This checks to see that something did not happen in rafract to not return a value
+	//			Color = Color + *space;
+	//		else
+	//			refractcount = 0;
+	//	}
+	//}
 		
 
 	if (Color.x > 1.5 || Color.y > 1.5 || Color.z > 1.5) { //std::cerr << "Error: light over 150% at some pixel\n"; print(Color);
@@ -522,11 +522,11 @@ Hitpoint* closestIntersection(Ray *ray, Hitpoint* ret) {// return the intersecti
 					ret->hitpoint.z = ray->start.z + (*smallest * ray->dir.z);
 					ret->normal = vec3(transpose(object->Xfmi) * vec4(vec3(object->Xfmi * vec4(ret->hitpoint, 1.0)), 0.0));
 					ray->mat = object->mat;
-					if (object->mat.refraction.w > defaultrefraction.w)//if this is a rafractive object
-						refracthist = object;//we will store the object in a rafract history to know what object we hit
-					else
-						refracthist = NULL;//we need to do this each time based on where in the vector the object is
-					lastobject = object;
+					//if (object->mat.refraction.w > defaultrefraction.w)//if this is a rafractive object
+					//	refracthist = object;//we will store the object in a rafract history to know what object we hit
+					//else
+					//	refracthist = NULL;//we need to do this each time based on where in the vector the object is
+					//lastobject = object;
 				} 
 				else {
 					if (*current < *smallest) { //If the new intersection is less then the current stored, change the current
@@ -536,21 +536,21 @@ Hitpoint* closestIntersection(Ray *ray, Hitpoint* ret) {// return the intersecti
 						ret->hitpoint.z = ray->start.z + (*smallest * ray->dir.z);
 						ret->normal = vec3(transpose(object->Xfmi) * vec4(vec3(object->Xfmi * vec4(ret->hitpoint, 1.0)), 0.0));
 						ray->mat = object->mat;
-						if (object->mat.refraction.w > defaultrefraction.w)//if this is a rafractive object
-							refracthist = object;//we will store the object in a rafract history to know what object we hit
-						else
-							refracthist = NULL;//we need to do this each time based on where in the vector the object is
-						lastobject = object;
+						//if (object->mat.refraction.w > defaultrefraction.w)//if this is a rafractive object
+						//	refracthist = object;//we will store the object in a rafract history to know what object we hit
+						//else
+						//	refracthist = NULL;//we need to do this each time based on where in the vector the object is
+						//lastobject = object;
 					}
 				}
 			}
 		}
 	}
 
-	if (refracthist == lastobject && ray->mat.refraction.w > defaultrefraction.w)//if we are using a rafraction ray inside of an object, and we hit the same refraction object we change the current index to the default as we left the object
-	{
-		ray->currentRefraction = defaultrefraction.w;
-	}
+	//if (refracthist == lastobject && ray->mat.refraction.w > defaultrefraction.w)//if we are using a rafraction ray inside of an object, and we hit the same refraction object we change the current index to the default as we left the object
+	//{
+	//	ray->currentRefraction = defaultrefraction.w;
+	//}
 
 	//ray->mat.print();
 	//std::cout << ray->currentRefraction << "\n";
