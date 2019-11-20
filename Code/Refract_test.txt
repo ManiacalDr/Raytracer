@@ -4,7 +4,7 @@ ambient 0.2 0.2 0.2
 light 1.0 1.0 1.0 100.0 0.0 50.0
 group
 material 0.0 0.5 0.0 0.8 0.8 0.8 50
-move 0.0 0.0 -10.0
+move 0.0 0.0 -20.0
 sphere
 groupend
 group
