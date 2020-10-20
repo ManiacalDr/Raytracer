@@ -821,17 +821,16 @@ int main(int argc, char* argv[]) {
 	int count = 0;
 
 	unsigned char r, g, b;
-	FILE *picfile;
-	picfile = fopen("out.ppm", "w");
-	fprintf(picfile, "P6# %dx%d Raytracer output\n%d %d\n255\n",
-			n,n,n,n);
+	std::ofstream picfile;
+	picfile.open("out.ppm",std::ofstream::binary);
+	picfile << "P6# " << n << "x" << n << " Raytracer output\n" << n << " " << n << "\n255\n";
 	// For each pixel
 	for (int j = 0; j <= n-1; j++) {// Y is flipped!
 		for (int i = n-1; i >= 0; i--) {
 			r = int(clamp(Pixels[i][j][0], float(0), float(1.0)) * 255);
 			g = int(clamp(Pixels[i][j][1], float(0), float(1.0)) * 255);
 			b = int(clamp(Pixels[i][j][2], float(0), float(1.0)) * 255);
-			fprintf(picfile, "%c%c%c", r, g, b);
+			picfile << r << g << b;
 			//std::cout << int(Pixels[i][j][0] * 255) << " " << int(Pixels[i][j][1] * 255) << " " << int(Pixels[i][j][2] * 255) << " \n";
 			// Remember though that this is a number between 0 and 255
 			// so might have to convert from 0-1.
@@ -840,6 +839,6 @@ int main(int argc, char* argv[]) {
 	}
 
 	std::cout << "Sucessfully wrote to the PPM " << count << "\n";
-	fclose(picfile);
+	picfile.close();
 	return 0;
 }
