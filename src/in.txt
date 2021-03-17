@@ -1,0 +1,17 @@
+view 1001 0.5
+background 0.025 0.05 0.5
+ambient 0.2 0.2 0.2
+light 1.0 1.0 1.0 100.0 0.0 50.0
+group
+material 0.0 0.5 0.0 0.8 0.8 0.8 50
+rotate 180 0.0 1.0 0.0
+move 0.0 0.0 -10.0
+sphere
+groupend
+group
+material 0.0 0.5 0.5 0.4 0.8 0.4 10
+rotate 180 0.0 0.0 1.0
+move -2.0 1.0 -8.0
+scale 0.1 0.1 0.1
+sphere
+groupend

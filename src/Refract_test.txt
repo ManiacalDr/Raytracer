@@ -1,0 +1,15 @@
+view 1001 0.5
+background 0.025 0.05 0.5
+ambient 0.2 0.2 0.2
+light 1.0 1.0 1.0 100.0 0.0 50.0
+group
+material 0.0 0.5 0.0 0.8 0.8 0.8 50
+move 0.0 0.0 -20.0
+sphere
+groupend
+group
+material 0.0 0.5 0.5 0.4 0.8 0.4 0
+refraction 1.0 1.0 1.0 2
+move 0.0 0.0 -5.0
+sphere
+groupend

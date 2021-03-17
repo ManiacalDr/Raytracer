@@ -7,10 +7,12 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include <chrono>
 
 // Include GLM
 #include <glm/ext.hpp>
 
+typedef std::chrono::high_resolution_clock Clock;
 using namespace glm;
 
 int raycount = 0;
@@ -802,6 +804,7 @@ int main(int argc, char* argv[]) {
 	Ray current(u);
 	//printVec(&u);
 	//printVec(&v);
+	auto t1 = Clock::now();
 	for (int j = n-1; j >= 0; j--) {
 		v.y = d - ph * j - ph / 2;//calculate midpoint for row
 		//std::cout << v.y << "\n";
@@ -817,6 +820,7 @@ int main(int argc, char* argv[]) {
 			Pixels[i][j][2] = Color.b;
 		}
 	}
+	auto t2 = Clock::now();
 	std::cout << "Sucessfully shot all rays " << raycount << "\n";
 	int count = 0;
 
@@ -839,6 +843,15 @@ int main(int argc, char* argv[]) {
 	}
 
 	std::cout << "Sucessfully wrote to the PPM " << count << "\n";
+
+	std::cout << "Delta t2-t1: " 
+		<< std::chrono::duration_cast<std::chrono::minutes>(t2 - t1).count()
+		<< " minutes, "
+		<< std::chrono::duration_cast<std::chrono::seconds>(t2 - t1).count()
+		<< " seconds, "
+		<< std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count()
+		<< " nanoseconds" << std::endl;
+
 	picfile.close();
 	return 0;
 }
