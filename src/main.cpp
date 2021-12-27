@@ -148,132 +148,6 @@ struct Sphere : virtual public Object{
 	}
 };
 
-struct Cylinder : virtual public Object {
-	Cylinder() {
-		Xform = mat4(1.0);
-		Xfmi = mat4(1.0);
-	}
-
-	Cylinder(mat4 xform, mat4 xfmi, Material m) {
-		Xform = xform;
-		Xfmi = xfmi;
-		mat = m;
-	}
-
-	double* quadratic(double A, double B, double C, double* ret) {//we pass a pointer in so this has some initlized memory in the calling function to set the final value too.
-		return NULL;
-	}
-
-	double* calcIntersection(dvec3 u, dvec3 v, double& ret) override {
-		return NULL;
-	}
-};
-
-struct Cone : virtual public Object {
-	Cone() {
-		Xform = mat4(1.0);
-		Xfmi = mat4(1.0);
-	}
-
-	Cone(mat4 xform, mat4 xfmi, Material m) {
-		Xform = xform;
-		Xfmi = xfmi;
-		mat = m;
-	}
-
-	double* quadratic(double A, double B, double C, double* ret) {//we pass a pointer in so this has some initlized memory in the calling function to set the final value too.
-		return NULL;
-	}
-
-	double* calcIntersection(dvec3 u, dvec3 v, double& ret) override {
-		return NULL;
-	}
-};
-
-struct Paraboloid : virtual public Object {
-	Paraboloid() {
-		Xform = mat4(1.0);
-		Xfmi = mat4(1.0);
-	}
-
-	Paraboloid(mat4 xform, mat4 xfmi, Material m) {
-		Xform = xform;
-		Xfmi = xfmi;
-		mat = m;
-	}
-
-	double* quadratic(double A, double B, double C, double* ret) {//we pass a pointer in so this has some initlized memory in the calling function to set the final value too.
-		return NULL;
-	}
-
-	double* calcIntersection(dvec3 u, dvec3 v, double& ret) override {
-		return NULL;
-	}
-};
-
-struct Hyperboloid : virtual public Object {
-	Hyperboloid() {
-		Xform = mat4(1.0);
-		Xfmi = mat4(1.0);
-	}
-
-	Hyperboloid(mat4 xform, mat4 xfmi, Material m) {
-		Xform = xform;
-		Xfmi = xfmi;
-		mat = m;
-	}
-
-	double* quadratic(double A, double B, double C, double* ret) {//we pass a pointer in so this has some initlized memory in the calling function to set the final value too.
-		return NULL;
-	}
-
-	double* calcIntersection(dvec3 u, dvec3 v, double& ret) override {
-		return NULL;
-	}
-};
-
-struct Torus : virtual public Object {
-	Torus() {
-		Xform = mat4(1.0);
-		Xfmi = mat4(1.0);
-	}
-
-	Torus(mat4 xform, mat4 xfmi, Material m) {
-		Xform = xform;
-		Xfmi = xfmi;
-		mat = m;
-	}
-
-	double* quadratic(double A, double B, double C, double* ret) {//we pass a pointer in so this has some initlized memory in the calling function to set the final value too.
-		return NULL;
-	}
-
-	double* calcIntersection(dvec3 u, dvec3 v, double& ret) override {
-		return NULL;
-	}
-};
-
-struct Triangle : virtual public Object {
-	Triangle() {
-		Xform = mat4(1.0);
-		Xfmi = mat4(1.0);
-	}
-
-	Triangle(mat4 xform, mat4 xfmi, Material m) {
-		Xform = xform;
-		Xfmi = xfmi;
-		mat = m;
-	}
-
-	double* quadratic(double A, double B, double C, double* ret) {//we pass a pointer in so this has some initlized memory in the calling function to set the final value too.
-		return NULL;
-	}
-
-	double* calcIntersection(dvec3 u, dvec3 v, double& ret) override {
-		return NULL;
-	}
-};
-
 struct Ray { //Stores data for Ray
 	dvec4 start;//is the Eye
 	dvec4 dir;
@@ -662,42 +536,6 @@ void processInput(const std::string& file) {
 			objects.push_back(object); //this needs to call some sort of new operator to allocate memory for the thingy
 			//cout << "\n";
 		}
-		else if ("cylinder" == *i) {
-			Cylinder* object = new Cylinder(CTM[level], CIM[level], MAT[level]);
-			//object->print();
-			objects.push_back(object); //this needs to call some sort of new operator to allocate memory for the thingy
-			//cout << "\n";
-		}
-		else if ("cone" == *i) {
-			Cone* object = new Cone(CTM[level], CIM[level], MAT[level]);
-			//object->print();
-			objects.push_back(object); //this needs to call some sort of new operator to allocate memory for the thingy
-			//cout << "\n";
-		}
-		else if ("paraboloid" == *i) {
-			Paraboloid* object = new Paraboloid(CTM[level], CIM[level], MAT[level]);
-			//object->print();
-			objects.push_back(object); //this needs to call some sort of new operator to allocate memory for the thingy
-			//cout << "\n";
-		}
-		else if ("hyperboloid" == *i) {
-			Hyperboloid* object = new Hyperboloid(CTM[level], CIM[level], MAT[level]);
-			//object->print();
-			objects.push_back(object); //this needs to call some sort of new operator to allocate memory for the thingy
-			//cout << "\n";
-		}
-		else if ("torus" == *i) {
-			Torus* object = new Torus(CTM[level], CIM[level], MAT[level]);
-			//object->print();
-			objects.push_back(object); //this needs to call some sort of new operator to allocate memory for the thingy
-			//cout << "\n";
-		}
-		else if ("triangle" == *i) {
-			Triangle* object = new Triangle(CTM[level], CIM[level], MAT[level]);
-			//object->print();
-			objects.push_back(object); //this needs to call some sort of new operator to allocate memory for the thingy
-			//cout << "\n";
-		}
 		else if ("light" == *i) {
 			float arr[6];
 			for (int j = 0; j < 6; j++) {
@@ -789,6 +627,7 @@ int main(int argc, char* argv[]) {
 	processInput(file);
 
 	//Pixels[n][n][3]
+	//std::cout << n << std::endl;
 	float** Pixels[n];//Made this way because I ran into an issue with allocating a 1000x1000 crashing the program due to large allocation request on the stack
 	for (int i = 0; i < n; i++) {
 		Pixels[i] = new float*[n];
